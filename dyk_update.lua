@@ -276,9 +276,6 @@ function mainTask()
         local newsec = dykc_tail:match('\n=.+=$')
         dykc_final = (newsec or '') .. dykc_final
       end
-      if i == #dykc_list - 1 then
-        print('123')
-      end
       old_tail_len = #dykc_tail
       dykc_tail = dykc_tail:gsub('\n=.+=$', '')
       dykc_list[i] = dykc_list[i]:sub(1, #dykc_list[i] - old_tail_len) .. dykc_tail
