@@ -145,6 +145,8 @@ function processDykcEntry(entry_str)
     else
       return false, entry
     end
+  else
+    return nil, entry.timestamp
   end
 end
 
@@ -189,7 +191,7 @@ function hashRemoval(hash_dict)
 
   local dykc_page = MediaWikiApi.getCurrent('Wikipedia:新条目推荐/候选')
   local dykc_list = dykc_page.content:split('\n{{ ?DYKEntry')
-  local dykc_head = table.remove(dykc_list, 1):gsub('\n=.+=$', ''):gsub('\n=.-月.-日.-=\n', '\n')
+  local dykc_head = table.remove(dykc_list, 1):gsub('\n=[^\n]+=$', ''):gsub('\n=[^\n]-月[^\n]-日[^\n]-=\n', '\n')
   for k = 1, #dykc_list do
     dykc_list[k] = '\n{{ DYKEntry' .. dykc_list[k]
   end
@@ -243,7 +245,7 @@ function mainTask()
   end
 
   local dykc_list = dykc_page.content:split('\n{{ ?DYKEntry')
-  local dykc_head = table.remove(dykc_list, 1):gsub('\n=.+=$', ''):gsub('\n=.-月.-日.-=\n', '\n')
+  local dykc_head = table.remove(dykc_list, 1):gsub('\n=[^\n]+=$', ''):gsub('\n=[^\n]-月[^\n]-日[^\n]-=\n', '\n')
   for k = 1, #dykc_list do
     dykc_list[k] = '\n{{ DYKEntry' .. dykc_list[k]
   end
@@ -273,6 +275,9 @@ function mainTask()
       if i == #dykc_list then
         local newsec = dykc_tail:match('\n=.+=$')
         dykc_final = (newsec or '') .. dykc_final
+      end
+      if i == #dykc_list - 1 then
+        print('123')
       end
       old_tail_len = #dykc_tail
       dykc_tail = dykc_tail:gsub('\n=.+=$', '')
