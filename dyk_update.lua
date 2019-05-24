@@ -256,7 +256,7 @@ function mainTask()
 
   local recent_time = getTime(dyk.timestamp)
 
-  if true or os.difftime(os.time(), recent_time) > delta_hours * 3600 then
+  if os.difftime(os.time(), recent_time) > delta_hours * 3600 then
     local new_dykc_list = {}
 
     local dyk_cont = dyk.content
