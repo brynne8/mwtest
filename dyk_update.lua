@@ -1,3 +1,7 @@
+--[[
+Author: Alexander Misel
+Original python code: https://github.com/liangent/updatedyk/blob/master/updatedyk.py
+]]
 local MediaWikiApi = require('mwtest/mwapi')
 local socket = require('socket')
 
