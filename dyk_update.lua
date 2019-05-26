@@ -191,7 +191,7 @@ function hashRemoval(hash_dict)
 
   local dykc_page = MediaWikiApi.getCurrent('Wikipedia:新条目推荐/候选')
   local dykc_list = dykc_page.content:split('\n{{ ?DYKEntry')
-  local dykc_head = table.remove(dykc_list, 1):gsub('\n=[^\n]+=$', ''):gsub('\n=[^\n]-月[^\n]-日[^\n]-=\n', '\n')
+  local dykc_head = table.remove(dykc_list, 1):gsub('\n=[^\n]-月[^\n]-日[^\n]-=\n', '\n'):gsub('\n=[^\n]+=%s-$', '')
   for k = 1, #dykc_list do
     dykc_list[k] = '\n{{ DYKEntry' .. dykc_list[k]
   end
@@ -202,11 +202,11 @@ function hashRemoval(hash_dict)
     local clear_entry = dykc_list[i]
     local dykc_tpl, dykc_tail = clear_entry:match('^\n{{ DYKEntry(.-)\n}}(.*)$')
     if i == #dykc_list then
-        local newsec = dykc_tail:match('\n=.+=$')
+        local newsec = dykc_tail:match('\n=[^\n]+=%s-$')
         dykc_final = (newsec or '') .. dykc_final
       end
     old_tail_len = #dykc_tail
-    dykc_tail = dykc_tail:gsub('\n=.+=$', '')
+    dykc_tail = dykc_tail:gsub('\n=[^\n]+=%s-$', '')
     dykc_list[i] = dykc_list[i]:sub(1, #dykc_list[i] - old_tail_len) .. dykc_tail
 
     local res, parsedEntry = processDykcEntry(dykc_tpl)
@@ -245,7 +245,7 @@ function mainTask()
   end
 
   local dykc_list = dykc_page.content:split('\n{{ ?DYKEntry')
-  local dykc_head = table.remove(dykc_list, 1):gsub('\n=[^\n]+=$', ''):gsub('\n=[^\n]-月[^\n]-日[^\n]-=\n', '\n')
+  local dykc_head = table.remove(dykc_list, 1):gsub('\n=[^\n]-月[^\n]-日[^\n]-=\n', '\n'):gsub('\n=[^\n]+=%s-$', '')
   for k = 1, #dykc_list do
     dykc_list[k] = '\n{{ DYKEntry' .. dykc_list[k]
   end
@@ -273,11 +273,11 @@ function mainTask()
     for i = #dykc_list, 1, -1 do
       local dykc_tpl, dykc_tail = dykc_list[i]:match('^\n{{ DYKEntry(.-)\n}}(.*)$')
       if i == #dykc_list then
-        local newsec = dykc_tail:match('\n=.+=$')
+        local newsec = dykc_tail:match('\n=.+=%s-$')
         dykc_final = (newsec or '') .. dykc_final
       end
       old_tail_len = #dykc_tail
-      dykc_tail = dykc_tail:gsub('\n=.+=$', '')
+      dykc_tail = dykc_tail:gsub('\n=.+=%s-$', '')
       dykc_list[i] = dykc_list[i]:sub(1, #dykc_list[i] - old_tail_len) .. dykc_tail
       
       local res, parsedEntry = processDykcEntry(dykc_tpl)

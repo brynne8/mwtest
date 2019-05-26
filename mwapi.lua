@@ -12,10 +12,10 @@ Dependencies:
 * lua-luajson: JSON parser/encoder for Lua
 * lua-multipart-post: HTTP Multipart Post helper
 ]]
-local https = require 'ssl.https'
-local json = require 'json'
-local ltn12 = require 'ltn12'
-local mpost = require 'multipart-post'
+local https = require('ssl.https')
+local json = require('rapidjson')
+local ltn12 = require('ltn12')
+local mpost = require('multipart-post')
 
 local MediaWikiApi = {
   userAgent = string.format('mediawikilua %d.%d', 0, 2),
