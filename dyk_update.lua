@@ -4,6 +4,7 @@ Original python code: https://github.com/liangent/updatedyk/blob/master/updatedy
 ]]
 local MediaWikiApi = require('mwtest/mwapi')
 local socket = require('socket')
+local sha1 = require('sha1')
 
 function getTime (iso8601)
   local y, m, d, H, M, S = iso8601:match('(%d+)-(%d+)-(%d+)T(%d+):(%d+):(%d+)')
@@ -54,11 +55,11 @@ function generateTpl(template, ordering)
   local tpl_str = ''
   if ordering then
     for _, v in ipairs(ordering) do
-      tpl_str = tpl_str .. '\n | ' .. v .. ' = ' .. template[v]
+      tpl_str = tpl_str .. '\n | ' .. v .. ' = ' .. (template[v] or '')
     end
   else
     for k, v in pairs(template) do
-      tpl_str = tpl_str .. '\n | ' .. k .. ' = ' .. v
+      tpl_str = tpl_str .. '\n | ' .. k .. ' = ' .. (v or '')
     end
   end
   return tpl_str
@@ -100,6 +101,9 @@ end
 function processDykcEntry(entry_str)
   local entry = normalizeTpl(entry_str)
 
+  if not entry.hash then
+    return sha1.sha1(entry.question), entry.timestamp
+  end
   if not entry.result then
     return nil, entry.timestamp
   end
@@ -281,7 +285,7 @@ function mainTask()
       dykc_list[i] = dykc_list[i]:sub(1, #dykc_list[i] - old_tail_len) .. dykc_tail
       
       local res, parsedEntry = processDykcEntry(dykc_tpl)
-      if res then
+      if res == true and #dykc_list < 12 then
         if not dyk_ques[parsedEntry.question] then
           table.insert(dyk_entries, 1, parsedEntry)
         end
@@ -309,8 +313,12 @@ function mainTask()
         end
         remove_hash[parsedEntry.hash] = true
       else
+        local temp_content = dykc_list[i]
+        if res and res ~= true then
+          temp_content = temp_content:gsub('\n}}', generateTpl({ hash = res }) .. '\n}}', 1)
+        end
         table.insert(new_dykc_list, 1, {
-          entry = dykc_list[i],
+          entry = temp_content,
           timestamp = tonumber(parsedEntry) -- actually timestamp
         })
       end
