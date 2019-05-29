@@ -120,7 +120,7 @@ function processDykcEntry(entry_str)
       rvlimit = 1,
       rvprop = 'user|comment',
       rvdir = 'newer',
-      rvstart = timestamp,
+      rvstart = timestamp - 1,
       rvend = timestamp,
       format = 'json',
       formatversion = 2
@@ -315,7 +315,7 @@ function mainTask()
       else
         local temp_content = dykc_list[i]
         if res and res ~= true then
-          temp_content = temp_content:gsub('\n}}', generateTpl({ hash = res }) .. '\n}}', 1)
+          temp_content = temp_content:gsub('\n}}', generateTpl({ hash = res, result = '' }) .. '\n}}', 1)
         end
         table.insert(new_dykc_list, 1, {
           entry = temp_content,
