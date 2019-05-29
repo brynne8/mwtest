@@ -285,7 +285,7 @@ function mainTask()
       dykc_list[i] = dykc_list[i]:sub(1, #dykc_list[i] - old_tail_len) .. dykc_tail
       
       local res, parsedEntry = processDykcEntry(dykc_tpl)
-      if res == true and #dykc_list < 12 then
+      if res == true and #dyk_entries < 12 then
         if not dyk_ques[parsedEntry.question] then
           table.insert(dyk_entries, 1, parsedEntry)
         end
