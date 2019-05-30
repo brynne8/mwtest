@@ -159,9 +159,9 @@ function updateTalkPage(article, id, dykc_tpl, dykc_tail, failed)
   local talk_page = MediaWikiApi.getCurrent(talk_title)
   talkpage_cont = talk_page and talk_page.content or ''
   talkpage_cont = talkpage_cont:gsub('{{ ?DYK ?[Ii]nvite%s-}}\n?', '')
-  local talk_new = os.date('!{{DYKtalk|%Y年|%m月%d日}}'):gsub('0(%d[月日])', '%1')
+  local talk_new = failed and '' or os.date('!{{DYKtalk|%Y年|%m月%d日}}\n'):gsub('0(%d[月日])', '%1')
   if #talkpage_cont then
-    talk_new = talk_new .. '\n' .. talkpage_cont
+    talk_new = talk_new .. talkpage_cont
   end
   
   local additional_params = { revid = id, closets = '{{subst:#time:U}}' }
@@ -287,14 +287,14 @@ function mainTask()
                               '* ' .. parsedEntry.question .. '\n', nil, true)
         MediaWikiApi.editPend('Wikipedia:新条目推荐/供稿/' .. os.date('!%Y年%m月%d日'):gsub('0(%d[月日])', '%1'),
                               '* ' .. parsedEntry.question .. '\n', nil, true)
-        MediaWikiApi.editPend('Wikipedia:新条目推荐/分类存档/未分类', '* ' .. parsedEntry.article .. '\n') -- append
+        MediaWikiApi.editPend('Wikipedia:新条目推荐/分类存档/未分类', ' [[' .. parsedEntry.article .. ']]') -- append
         -- purge mainpage?
         MediaWikiApi.trace('Archive talk page of ' .. parsedEntry.article)
         updateTalkPage(parsedEntry.article, dykc_page.revid, dykc_tpl, dykc_tail)
         remove_hash[parsedEntry.hash] = true
       elseif res == false then
         MediaWikiApi.trace('Archive failed candidate ' .. parsedEntry.article)
-        MediaWikiApi.editPend('Wikipedia talk:新条目推荐/未通过/' .. os.date('!%Y年'), '* ' .. parsedEntry.question .. '\n') -- append
+        MediaWikiApi.editPend('Wikipedia:新条目推荐/未通过/' .. os.date('!%Y年'), '\n* ' .. parsedEntry.question) -- append
         MediaWikiApi.trace('Archive talk page of ' .. parsedEntry.article)
         artpage = MediaWikiApi.getCurrent(parsedEntry.article)
         if artpage then
