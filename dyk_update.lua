@@ -127,7 +127,7 @@ function processDykcEntry(entry_str)
     }
     if not jsonres.query.pages[1].revisions then
       MediaWikiApi.trace('Bad timestamp!')
-      return nil
+      return nil, entry.timestamp
     end
     local user = jsonres.query.pages[1].revisions[1].user
     
@@ -141,7 +141,7 @@ function processDykcEntry(entry_str)
     }
     if not hasValue(jsonres.query.users[1].groups, 'sysop') then
       MediaWikiApi.trace('User:' .. user .. ' doesn\'t have sysop access!')
-      return nil
+      return nil, entry.timestamp
     end
     
     if result == '+' or result == '*' then
