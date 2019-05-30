@@ -210,22 +210,15 @@ function hashRemoval(hash_dict)
         dykc_final = (newsec or '') .. dykc_final
       end
     old_tail_len = #dykc_tail
-    dykc_tail = dykc_tail:gsub('\n=[^\n]+=%s-$', '')
+    dykc_tail = dykc_tail:gsub('\n=.+=%s-$', '')
     dykc_list[i] = dykc_list[i]:sub(1, #dykc_list[i] - old_tail_len) .. dykc_tail
 
-    local res, parsedEntry = processDykcEntry(dykc_tpl)
-    if not (res and parsedEntry.hash and hash_dict[parsedEntry.hash]) then
-      if res then
-        table.insert(new_dykc_list, {
-          entry = dykc_list[i],
-          timestamp = tonumber(parsedEntry.timestamp)
-        })
-      else
-        table.insert(new_dykc_list, {
-          entry = dykc_list[i],
-          timestamp = tonumber(parsedEntry) -- actually timestamp
-        })
-      end
+    local parsedEntry = normalizeTpl(dykc_tpl)
+    if not (parsedEntry.hash and hash_dict[parsedEntry.hash]) then
+      table.insert(new_dykc_list, {
+        entry = dykc_list[i],
+        timestamp = tonumber(parsedEntry.timestamp)
+      })
     end
   end
   
@@ -277,7 +270,7 @@ function mainTask()
     for i = #dykc_list, 1, -1 do
       local dykc_tpl, dykc_tail = dykc_list[i]:match('^\n{{ DYKEntry(.-)\n}}(.*)$')
       if i == #dykc_list then
-        local newsec = dykc_tail:match('\n=.+=%s-$')
+        local newsec = dykc_tail:match('\n=[^\n]+=%s-$')
         dykc_final = (newsec or '') .. dykc_final
       end
       old_tail_len = #dykc_tail
@@ -314,12 +307,17 @@ function mainTask()
         remove_hash[parsedEntry.hash] = true
       else
         local temp_content = dykc_list[i]
-        if res and res ~= true then
-          temp_content = temp_content:gsub('\n}}', generateTpl({ hash = res, result = '' }) .. '\n}}', 1)
+        local timestamp = tonumber(parsedEntry)
+        if res then
+          if res == true then
+            timestamp = tonumber(parsedEntry.timestamp)
+          else
+            temp_content = temp_content:gsub('\n}}', generateTpl({ hash = res, result = '' }, { 'hash', 'result' }) .. '\n}}', 1)
+          end
         end
         table.insert(new_dykc_list, 1, {
           entry = temp_content,
-          timestamp = tonumber(parsedEntry) -- actually timestamp
+          timestamp = timestamp
         })
       end
     end
