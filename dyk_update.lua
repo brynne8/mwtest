@@ -211,25 +211,17 @@ function getNewDykResult(old_entries, typeTable, entries)
   actual_updates = #entries
 
   local compli_entries = subrange(old_entries, 1, 6-actual_updates)
-  local continued = false
+  local checked_last = 0
   while actual_updates > 0 do
     local full = true
-    if continued then
-      local old_type = compli_entries[#compli_entries].type
-      local entry_id = typeTable[old_type]
+    for i=checked_last+1, #compli_entries do
+      local oentry_type = compli_entries[i].type
+      local entry_id = typeTable[oentry_type]
       if entry_id then
-        typeTable[old_type] = nil
+        typeTable[oentry_type] = nil
         actual_updates = actual_updates - 1
+        compli_entries[6-actual_updates] = entries[6-actual_updates]
         full = false
-      end
-    else
-      for _, v in ipairs(compli_entries) do
-        local entry_id = typeTable[v.type]
-        if entry_id then
-          typeTable[v.type] = nil
-          actual_updates = actual_updates - 1
-          full = false
-        end
       end
     end
     
@@ -238,8 +230,7 @@ function getNewDykResult(old_entries, typeTable, entries)
         return typeTable[x.entry.type]
       end)), compli_entries
     else
-      compli_entries[6-actual_updates] = entries[6-actual_updates]
-      continued = true
+      checked_last = #compli_entries
     end
   end
 end
