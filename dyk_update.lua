@@ -6,6 +6,8 @@ local MediaWikiApi = require('mwtest/mwapi')
 local socket = require('socket')
 local sha1 = require('sha1')
 
+local MAX_UPDATES = 3
+
 function getTime (iso8601)
   local y, m, d, H, M, S = iso8601:match('(%d+)-(%d+)-(%d+)T(%d+):(%d+):(%d+)')
   return os.time{ year = y, month = m, day = d, hour = H, min = M, sec = S } + 28800
@@ -19,6 +21,53 @@ function hasValue (tab, val)
     if value == val then return true end
   end
   return false
+end
+
+function subrange(t, first, last)
+  local sub = {}
+  for i=first,last do
+    sub[#sub + 1] = t[i]
+  end
+  return sub
+end
+
+-- only for arrays
+table.filter = function(t, filterIter)
+  local out = {}
+
+  for i, v in ipairs(t) do
+    if filterIter(v, i, t) then
+      table.insert(out, v)
+    end
+  end
+
+  return out
+end
+
+table.map = function(t, mapFunc)
+  local out = {}
+
+  for i, v in ipairs(t) do
+    out[i] = mapFunc(v, i, t)
+  end
+
+  return out
+end
+
+table.reverse = function (t)
+  local reversedTable = {}
+  local itemCount = #t
+  for k, v in ipairs(t) do
+    reversedTable[itemCount + 1 - k] = v
+  end
+  return reversedTable
+end
+
+function tableConcat(t1, t2)
+  for i=1, #t2 do
+    t1[#t1+1] = t2[i]
+  end
+  return t1
 end
 
 function string.split(str, pat)
@@ -154,6 +203,47 @@ function processDykcEntry(entry_str)
   end
 end
 
+function getNewDykResult(old_entries, typeTable, entries)
+  local actual_updates = MAX_UPDATES
+  if #entries >= actual_updates then
+    return table.reverse(subrange(entries, 1, actual_updates)), subrange(old_entries, 1, 6-actual_updates)
+  end
+  actual_updates = #entries
+
+  local compli_entries = subrange(old_entries, 1, 6-actual_updates)
+  local continued = false
+  while actual_updates > 0 do
+    local full = true
+    if continued then
+      local old_type = compli_entries[#compli_entries].type
+      local entry_id = typeTable[old_type]
+      if entry_id then
+        typeTable[old_type] = nil
+        actual_updates = actual_updates - 1
+        full = false
+      end
+    else
+      for _, v in ipairs(compli_entries) do
+        local entry_id = typeTable[v.type]
+        if entry_id then
+          typeTable[v.type] = nil
+          actual_updates = actual_updates - 1
+          full = false
+        end
+      end
+    end
+    
+    if full then
+      return table.reverse(table.filter(entries, function(x)
+        return typeTable[x.entry.type]
+      end)), compli_entries
+    else
+      compli_entries[6-actual_updates] = entries[6-actual_updates]
+      continued = true
+    end
+  end
+end
+
 function updateTalkPage(article, id, dykc_tpl, dykc_tail, failed)
   local talk_title = 'Talk:' .. article
   local talk_page = MediaWikiApi.getCurrent(talk_title)
@@ -176,16 +266,18 @@ end
 function concatTimedEntries(new_list)
   local result_str = ''
   for k, v in ipairs(new_list) do
-    if v.timestamp then
-      if k == 1 then
-        result_str = result_str .. os.date('!\n=== %m月%d日 ===', v.timestamp):gsub('0(%d[月日])', '%1')
-      elseif new_list[k-1].timestamp then
-        if os.date('!%d', new_list[k-1].timestamp) ~= os.date('!%d', v.timestamp) then
+    if not v.removed then
+      if v.timestamp then
+        if k == 1 then
           result_str = result_str .. os.date('!\n=== %m月%d日 ===', v.timestamp):gsub('0(%d[月日])', '%1')
+        elseif new_list[k-1].timestamp then
+          if os.date('!%d', new_list[k-1].timestamp) ~= os.date('!%d', v.timestamp) then
+            result_str = result_str .. os.date('!\n=== %m月%d日 ===', v.timestamp):gsub('0(%d[月日])', '%1')
+          end
         end
       end
+      result_str = result_str .. '\n==== ====' .. v.entry
     end
-    result_str = result_str .. '\n==== ====' .. v.entry
   end
   return result_str
 end
@@ -248,14 +340,7 @@ function mainTask()
   end
   local dykc_final = table.remove(dykc_list)
 
-  local delta_hours = 8
-  if #dykc_list > 16 then
-    delta_hours = 2
-  elseif #dykc_list > 12 then
-    delta_hours = 4
-  elseif #dykc_list > 6 then
-    delta_hours = 6
-  end
+  local delta_hours = 6
 
   local recent_time = getTime(dyk.timestamp)
 
@@ -264,6 +349,10 @@ function mainTask()
 
     local dyk_cont = dyk.content
     local dyk_entries, dyk_ques, dyk_start, dyk_end = processDykEntry(dyk_cont)
+    
+    -- new dyk related
+    local typeTable = {}
+    local new_dyk_entries = {}
     
     local remove_hash = {}
     
@@ -278,21 +367,7 @@ function mainTask()
       dykc_list[i] = dykc_list[i]:sub(1, #dykc_list[i] - old_tail_len) .. dykc_tail
       
       local res, parsedEntry = processDykcEntry(dykc_tpl)
-      if res == true and #dyk_entries < 12 then
-        if not dyk_ques[parsedEntry.question] then
-          table.insert(dyk_entries, 1, parsedEntry)
-        end
-        MediaWikiApi.trace('Archiving ' .. parsedEntry.article)
-        MediaWikiApi.editPend('Wikipedia:新条目推荐/存档/' .. os.date('!%Y年%m月'):gsub('0(%d[月日])', '%1'),
-                              '* ' .. parsedEntry.question .. '\n', nil, true)
-        MediaWikiApi.editPend('Wikipedia:新条目推荐/供稿/' .. os.date('!%Y年%m月%d日'):gsub('0(%d[月日])', '%1'),
-                              '* ' .. parsedEntry.question .. '\n', nil, true)
-        MediaWikiApi.editPend('Wikipedia:新条目推荐/分类存档/未分类', ' [[' .. parsedEntry.article .. ']]') -- append
-        -- purge mainpage?
-        MediaWikiApi.trace('Archive talk page of ' .. parsedEntry.article)
-        updateTalkPage(parsedEntry.article, dykc_page.revid, dykc_tpl, dykc_tail)
-        remove_hash[parsedEntry.hash] = true
-      elseif res == false then
+      if res == false then
         MediaWikiApi.trace('Archive failed candidate ' .. parsedEntry.article)
         MediaWikiApi.editPend('Wikipedia:新条目推荐/未通过/' .. os.date('!%Y年'), '\n* ' .. parsedEntry.question) -- append
         MediaWikiApi.trace('Archive talk page of ' .. parsedEntry.article)
@@ -308,25 +383,56 @@ function mainTask()
       else
         local temp_content = dykc_list[i]
         local timestamp = tonumber(parsedEntry)
+        local new_list_index = #new_dykc_list + 1
         if res then
           if res == true then
             timestamp = tonumber(parsedEntry.timestamp)
+            if not (dyk_ques[parsedEntry.question] or typeTable[parsedEntry.type]) then
+              local new_dyk_index = #new_dyk_entries + 1
+              typeTable[parsedEntry.type] = new_dyk_index
+              new_dyk_entries[new_dyk_index] = {
+                entry = parsedEntry,
+                index = new_list_index,
+                dykc_tpl = dykc_tpl,
+                dykc_tail = dykc_tail
+              }
+            end
           else
             temp_content = temp_content:gsub('\n}}', generateTpl({ hash = res, result = '' }, { 'hash', 'result' }) .. '\n}}', 1)
           end
         end
-        table.insert(new_dykc_list, 1, {
+        new_dykc_list[new_list_index] = {
           entry = temp_content,
           timestamp = timestamp
-        })
+        }
       end
     end
+    
+    local update_ones, old_ones = getNewDykResult(dyk_entries, typeTable, new_dyk_entries)
+    for i, v in ipairs(update_ones) do
+      remove_hash[v.entry.hash] = true
+      new_dykc_list[v.index].removed = true
+    end
+    dyk_entries = tableConcat(table.map(update_ones, function(x)
+      local the_entry = x.entry
+      MediaWikiApi.trace('Archiving ' .. the_entry.article)
+      MediaWikiApi.editPend('Wikipedia:新条目推荐/存档/' .. os.date('!%Y年%m月'):gsub('0(%d[月日])', '%1'),
+                            '* ' .. the_entry.question .. '\n', nil, true)
+      MediaWikiApi.editPend('Wikipedia:新条目推荐/供稿/' .. os.date('!%Y年%m月%d日'):gsub('0(%d[月日])', '%1'),
+                            '* ' .. the_entry.question .. '\n', nil, true)
+      MediaWikiApi.editPend('Wikipedia:新条目推荐/分类存档/未分类', ' [[' .. the_entry.article .. ']]') -- append
+      -- purge mainpage?
+      MediaWikiApi.trace('Archive talk page of ' .. the_entry.article)
+      updateTalkPage(the_entry.article, dykc_page.revid, x.dykc_tpl, x.dykc_tail)
+      return x.entry
+    end), old_ones)
+    
     MediaWikiApi.trace('Updating DYK page')
     MediaWikiApi.edit('Template:Dyk', updateDyk(dyk_entries, dyk_cont, dyk_start, dyk_end))
     
     MediaWikiApi.trace('Updating DYKC page')
     if not pcall(function ()
-      MediaWikiApi.edit('Wikipedia:新条目推荐/候选', dykc_head .. concatTimedEntries(new_dykc_list) .. dykc_final)
+      MediaWikiApi.edit('Wikipedia:新条目推荐/候选', dykc_head .. concatTimedEntries(table.reverse(new_dykc_list)) .. dykc_final)
     end) then
       MediaWikiApi.trace('Save failed. Try again...')
       hashRemoval(remove_hash)
