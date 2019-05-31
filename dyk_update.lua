@@ -214,7 +214,8 @@ function getNewDykResult(old_entries, typeTable, entries)
   local checked_last = 0
   while actual_updates > 0 do
     local full = true
-    for i=checked_last+1, #compli_entries do
+    local new_compli_len = #compli_entries
+    for i=checked_last+1, new_compli_len do
       local oentry_type = compli_entries[i].type
       local entry_id = typeTable[oentry_type]
       if entry_id then
@@ -230,7 +231,7 @@ function getNewDykResult(old_entries, typeTable, entries)
         return typeTable[x.entry.type]
       end)), compli_entries
     else
-      checked_last = #compli_entries
+      checked_last = new_compli_len
     end
   end
 end
