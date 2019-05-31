@@ -193,6 +193,9 @@ function processDykcEntry(entry_str)
       return nil, entry.timestamp
     end
     
+    -- lowercase the type
+    entry.type = entry.type and entry.type:lower()
+    
     if result == '+' or result == '*' then
       return true, entry
     else
@@ -223,6 +226,7 @@ function getNewDykResult(old_entries, typeTable, entries)
     return table.reverse(subrange(filtered_entries, 1, actual_updates)), compli_entries
   end
   actual_updates = entries_len
+  compli_entries = subrange(old_entries, 1, 6-actual_updates)
   
   while actual_updates > 0 do
     local full = true
@@ -413,26 +417,29 @@ function mainTask()
     end
     
     local update_ones, old_ones = getNewDykResult(dyk_entries, typeTable, new_dyk_entries)
-    for i, v in ipairs(update_ones) do
-      remove_hash[v.entry.hash] = true
-      new_dykc_list[v.index].removed = true
+    -- check if we need to update the dyk
+    if update_ones then
+      for i, v in ipairs(update_ones) do
+        remove_hash[v.entry.hash] = true
+        new_dykc_list[v.index].removed = true
+      end
+      dyk_entries = tableConcat(table.map(update_ones, function(x)
+        local the_entry = x.entry
+        MediaWikiApi.trace('Archiving ' .. the_entry.article)
+        MediaWikiApi.editPend('Wikipedia:新条目推荐/存档/' .. os.date('!%Y年%m月'):gsub('0(%d[月日])', '%1'),
+                              '* ' .. the_entry.question .. '\n', nil, true)
+        MediaWikiApi.editPend('Wikipedia:新条目推荐/供稿/' .. os.date('!%Y年%m月%d日'):gsub('0(%d[月日])', '%1'),
+                              '* ' .. the_entry.question .. '\n', nil, true)
+        MediaWikiApi.editPend('Wikipedia:新条目推荐/分类存档/未分类', ' [[' .. the_entry.article .. ']]') -- append
+        -- purge mainpage?
+        MediaWikiApi.trace('Archive talk page of ' .. the_entry.article)
+        updateTalkPage(the_entry.article, dykc_page.revid, x.dykc_tpl, x.dykc_tail)
+        return x.entry
+      end), old_ones)
+      
+      MediaWikiApi.trace('Updating DYK page')
+      MediaWikiApi.edit('Template:Dyk', updateDyk(dyk_entries, dyk_cont, dyk_start, dyk_end))
     end
-    dyk_entries = tableConcat(table.map(update_ones, function(x)
-      local the_entry = x.entry
-      MediaWikiApi.trace('Archiving ' .. the_entry.article)
-      MediaWikiApi.editPend('Wikipedia:新条目推荐/存档/' .. os.date('!%Y年%m月'):gsub('0(%d[月日])', '%1'),
-                            '* ' .. the_entry.question .. '\n', nil, true)
-      MediaWikiApi.editPend('Wikipedia:新条目推荐/供稿/' .. os.date('!%Y年%m月%d日'):gsub('0(%d[月日])', '%1'),
-                            '* ' .. the_entry.question .. '\n', nil, true)
-      MediaWikiApi.editPend('Wikipedia:新条目推荐/分类存档/未分类', ' [[' .. the_entry.article .. ']]') -- append
-      -- purge mainpage?
-      MediaWikiApi.trace('Archive talk page of ' .. the_entry.article)
-      updateTalkPage(the_entry.article, dykc_page.revid, x.dykc_tpl, x.dykc_tail)
-      return x.entry
-    end), old_ones)
-    
-    MediaWikiApi.trace('Updating DYK page')
-    MediaWikiApi.edit('Template:Dyk', updateDyk(dyk_entries, dyk_cont, dyk_start, dyk_end))
     
     MediaWikiApi.trace('Updating DYKC page')
     if not pcall(function ()
