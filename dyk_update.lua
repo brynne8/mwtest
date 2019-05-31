@@ -205,13 +205,25 @@ end
 
 function getNewDykResult(old_entries, typeTable, entries)
   local actual_updates = MAX_UPDATES
-  if #entries >= actual_updates then
-    return table.reverse(subrange(entries, 1, actual_updates)), subrange(old_entries, 1, 6-actual_updates)
-  end
-  actual_updates = #entries
-
   local compli_entries = subrange(old_entries, 1, 6-actual_updates)
-  local checked_last = 0
+  local entries_len = #entries
+  for i=1, 6-actual_updates do
+    local oentry_type = compli_entries[i].type
+    local entry_id = typeTable[oentry_type]
+    if entry_id then
+      typeTable[oentry_type] = nil
+      entries_len = entries_len - 1
+    end
+  end
+  local checked_last = 6 - actual_updates
+  if entries_len >= actual_updates then
+    local filtered_entries = table.filter(entries, function(x)
+      return typeTable[x.entry.type]
+    end)
+    return table.reverse(subrange(filtered_entries, 1, actual_updates)), compli_entries
+  end
+  actual_updates = entries_len
+  
   while actual_updates > 0 do
     local full = true
     local new_compli_len = #compli_entries
