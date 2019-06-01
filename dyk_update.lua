@@ -344,7 +344,7 @@ function mainTask()
               }
             end
           else
-            new_list_item.temp_content = new_list_item.temp_content:gsub('\n}}',
+            new_list_item.entry = new_list_item.entry:gsub('\n}}',
               generateTpl({ hash = res, result = '' }, { 'hash', 'result' }) .. '\n}}', 1)
           end
         end
