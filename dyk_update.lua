@@ -3,91 +3,11 @@ Author: Alexander Misel
 Original python code: https://github.com/liangent/updatedyk/blob/master/updatedyk.py
 ]]
 local MediaWikiApi = require('mwtest/mwapi')
+local Utils = require('mwtest/utils')
 local socket = require('socket')
 local sha1 = require('sha1')
 
 local MAX_UPDATES = 3
-
-function getTime (iso8601)
-  local y, m, d, H, M, S = iso8601:match('(%d+)-(%d+)-(%d+)T(%d+):(%d+):(%d+)')
-  return os.time{ year = y, month = m, day = d, hour = H, min = M, sec = S } + 28800
-end
-
-function hasValue (tab, val)
-  if not tab then
-    return false
-  end
-  for _, value in ipairs(tab) do
-    if value == val then return true end
-  end
-  return false
-end
-
-function subrange(t, first, last)
-  local sub = {}
-  for i=first,last do
-    sub[#sub + 1] = t[i]
-  end
-  return sub
-end
-
--- only for arrays
-table.filter = function(t, filterIter)
-  local out = {}
-
-  for i, v in ipairs(t) do
-    if filterIter(v, i, t) then
-      table.insert(out, v)
-    end
-  end
-
-  return out
-end
-
-table.map = function(t, mapFunc)
-  local out = {}
-
-  for i, v in ipairs(t) do
-    out[i] = mapFunc(v, i, t)
-  end
-
-  return out
-end
-
-table.reverse = function (t)
-  local reversedTable = {}
-  local itemCount = #t
-  for k, v in ipairs(t) do
-    reversedTable[itemCount + 1 - k] = v
-  end
-  return reversedTable
-end
-
-function tableConcat(t1, t2)
-  for i=1, #t2 do
-    t1[#t1+1] = t2[i]
-  end
-  return t1
-end
-
-function string.split(str, pat)
-   local t = {}  -- NOTE: use {n = 0} in Lua-5.0
-   local fpat = '(.-)' .. pat
-   local last_end = 1
-   local s, e, cap = str:find(fpat, 1)
-   while s do
-      if s ~= 1 or cap ~= '' then
-         table.insert(t,cap)
-      end
-      last_end = e+1
-      s, e, cap = str:find(fpat, last_end)
-   end
-   if last_end <= #str then
-      cap = str:sub(last_end)
-      table.insert(t, cap)
-   end
-   return t
-end
 
 function normalizeTpl(tpl_str)
   local template = {}
@@ -188,7 +108,7 @@ function processDykcEntry(entry_str)
       usprop = 'groups',
       format = 'json'
     }
-    if not hasValue(jsonres.query.users[1].groups, 'sysop') then
+    if not Utils.hasValue(jsonres.query.users[1].groups, 'sysop') then
       MediaWikiApi.trace('User:' .. user .. ' doesn\'t have sysop access!')
       return nil, entry.timestamp
     end
@@ -208,7 +128,7 @@ end
 
 function getNewDykResult(old_entries, typeTable, entries)
   local actual_updates = MAX_UPDATES
-  local compli_entries = subrange(old_entries, 1, 6-actual_updates)
+  local compli_entries = Utils.subrange(old_entries, 1, 6-actual_updates)
   local entries_len = #entries
   for i=1, 6-actual_updates do
     local oentry_type = compli_entries[i].type
@@ -223,10 +143,10 @@ function getNewDykResult(old_entries, typeTable, entries)
     local filtered_entries = table.filter(entries, function(x)
       return typeTable[x.entry.type]
     end)
-    return table.reverse(subrange(filtered_entries, 1, actual_updates)), compli_entries
+    return table.reverse(Utils.subrange(filtered_entries, 1, actual_updates)), compli_entries
   end
   actual_updates = entries_len
-  compli_entries = subrange(old_entries, 1, 6-actual_updates)
+  compli_entries = Utils.subrange(old_entries, 1, 6-actual_updates)
   
   while actual_updates > 0 do
     local full = true
@@ -250,6 +170,18 @@ function getNewDykResult(old_entries, typeTable, entries)
       checked_last = new_compli_len
     end
   end
+end
+
+function archivePassedArticles(the_entry, revid, dykc_tpl, dykc_tail)
+  MediaWikiApi.trace('Archiving ' .. the_entry.article)
+  MediaWikiApi.editPend('Wikipedia:新条目推荐/存档/' .. os.date('!%Y年%m月'):gsub('0(%d[月日])', '%1'),
+                        '* ' .. the_entry.question .. '\n', nil, true)
+  MediaWikiApi.editPend('Wikipedia:新条目推荐/供稿/' .. os.date('!%Y年%m月%d日'):gsub('0(%d[月日])', '%1'),
+                        '* ' .. the_entry.question .. '\n', nil, true)
+  MediaWikiApi.editPend('Wikipedia:新条目推荐/分类存档/未分类', ' [[' .. the_entry.article .. ']]') -- append
+  -- purge mainpage?
+  MediaWikiApi.trace('Archive talk page of ' .. the_entry.article)
+  updateTalkPage(the_entry.article, revid, dykc_tpl, dykc_tail)
 end
 
 function updateTalkPage(article, id, dykc_tpl, dykc_tail, failed)
@@ -350,7 +282,7 @@ function mainTask()
 
   local delta_hours = 6
 
-  local recent_time = getTime(dyk.timestamp)
+  local recent_time = Utils.getTime(dyk.timestamp)
 
   if os.difftime(os.time(), recent_time) > delta_hours * 3600 then
     local new_dykc_list = {}
@@ -389,13 +321,19 @@ function mainTask()
         end
         remove_hash[parsedEntry.hash] = true
       else
-        local temp_content = dykc_list[i]
-        local timestamp = tonumber(parsedEntry)
         local new_list_index = #new_dykc_list + 1
+        local new_list_item = {
+          entry = dykc_list[i],
+          timestamp = tonumber(parsedEntry)
+        }
         if res then
           if res == true then
-            timestamp = tonumber(parsedEntry.timestamp)
-            if not (dyk_ques[parsedEntry.question] or typeTable[parsedEntry.type]) then
+            new_list_item.timestamp = tonumber(parsedEntry.timestamp)
+            if dyk_ques[parsedEntry.question] then
+              archivePassedArticles(parsedEntry, dykc_page.revid, dykc_tpl, dykc_tail)
+              new_list_item.removed = true
+              remove_hash[parsedEntry.hash] = true
+            elseif not typeTable[parsedEntry.type] then
               local new_dyk_index = #new_dyk_entries + 1
               typeTable[parsedEntry.type] = new_dyk_index
               new_dyk_entries[new_dyk_index] = {
@@ -406,13 +344,11 @@ function mainTask()
               }
             end
           else
-            temp_content = temp_content:gsub('\n}}', generateTpl({ hash = res, result = '' }, { 'hash', 'result' }) .. '\n}}', 1)
+            new_list_item.temp_content = new_list_item.temp_content:gsub('\n}}',
+              generateTpl({ hash = res, result = '' }, { 'hash', 'result' }) .. '\n}}', 1)
           end
         end
-        new_dykc_list[new_list_index] = {
-          entry = temp_content,
-          timestamp = timestamp
-        }
+        new_dykc_list[new_list_index] = new_list_item
       end
     end
     
@@ -423,17 +359,8 @@ function mainTask()
         remove_hash[v.entry.hash] = true
         new_dykc_list[v.index].removed = true
       end
-      dyk_entries = tableConcat(table.map(update_ones, function(x)
-        local the_entry = x.entry
-        MediaWikiApi.trace('Archiving ' .. the_entry.article)
-        MediaWikiApi.editPend('Wikipedia:新条目推荐/存档/' .. os.date('!%Y年%m月'):gsub('0(%d[月日])', '%1'),
-                              '* ' .. the_entry.question .. '\n', nil, true)
-        MediaWikiApi.editPend('Wikipedia:新条目推荐/供稿/' .. os.date('!%Y年%m月%d日'):gsub('0(%d[月日])', '%1'),
-                              '* ' .. the_entry.question .. '\n', nil, true)
-        MediaWikiApi.editPend('Wikipedia:新条目推荐/分类存档/未分类', ' [[' .. the_entry.article .. ']]') -- append
-        -- purge mainpage?
-        MediaWikiApi.trace('Archive talk page of ' .. the_entry.article)
-        updateTalkPage(the_entry.article, dykc_page.revid, x.dykc_tpl, x.dykc_tail)
+      dyk_entries = Utils.tableConcat(table.map(update_ones, function(x)
+        archivePassedArticles(x.entry, dykc_page.revid, x.dykc_tpl, x.dykc_tail)
         return x.entry
       end), old_ones)
       
