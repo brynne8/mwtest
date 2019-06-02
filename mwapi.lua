@@ -21,6 +21,7 @@ local MediaWikiApi = {
   userAgent = string.format('mediawikilua %d.%d', 0, 2),
   apiPath = 'https://zh.wikipedia.org/w/api.php',
   cookie = {},
+  done_pages = {},
   edit_token = nil,
   base_time = nil
 }
@@ -56,6 +57,12 @@ local function httpspost(url, postBody, reqheaders)
 end
 
 local function throwUserError(text)
+  local done_titles = {}
+  for k, _ in pairs(MediaWikiApi.done_pages) do
+    table.insert(done_titles, k)
+  end
+  print('{' .. table.concat(done_titles) .. '}')
+  
   error(text)
 end
 
@@ -140,14 +147,13 @@ function MediaWikiApi.edit(title, text, summary)
 end
 
 function MediaWikiApi.editPend(title, text, summary, isPrepend)
+  if MediaWikiApi.done_pages[title] then return end
   print('\nEditing', title, text)
   --[[local arguments = {
     action = 'edit',
     title = title,
     summary = summary,
     token = MediaWikiApi.getEditToken(),
-    basetimestamp = MediaWikiApi.base_time,
-    starttimestamp = os.time(),
     format = 'json'
   }
   if isPrepend then
@@ -159,6 +165,8 @@ function MediaWikiApi.editPend(title, text, summary, isPrepend)
   local res_error = MediaWikiApi.performRequest(arguments).error
   if res_error then
     throwUserError('Edit failed. Reason: ' .. res_error.info)
+  else
+    MediaWikiApi.done_pages[title] = true
   end]]
 end
 
@@ -256,7 +264,7 @@ function MediaWikiApi.performHttpRequest(path, arguments, post) -- changed signa
   if not resultHeaders.status or resultHeaders.status == 'closed' then
     throwUserError('No network connection')
   elseif resultHeaders.status ~= 200 then
-    MediaWikiApi.httpError(resultHeaders.status)
+    throwUserError('HttpError! Received HTTP status = ' .. resultHeaders.status)
   end
   MediaWikiApi.parseCookie(resultHeaders['set-cookie'])
   -- MediaWikiApi.trace('new cookie: '..resultHeaders['set-cookie'])
