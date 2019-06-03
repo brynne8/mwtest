@@ -173,6 +173,7 @@ function getNewDykResult(old_entries, typeTable, entries)
 end
 
 function archivePassedArticles(the_entry, revid, dykc_tpl, dykc_tail)
+  if MediaWikiApi.done_pages[the_entry.article] then return end
   MediaWikiApi.trace('Archiving ' .. the_entry.article)
   MediaWikiApi.editPend('Wikipedia:新条目推荐/存档/' .. os.date('!%Y年%m月'):gsub('0(%d[月日])', '%1'),
                         '* ' .. the_entry.question .. '\n', nil, true)
@@ -182,6 +183,8 @@ function archivePassedArticles(the_entry, revid, dykc_tpl, dykc_tail)
   -- purge mainpage?
   MediaWikiApi.trace('Archive talk page of ' .. the_entry.article)
   updateTalkPage(the_entry.article, revid, dykc_tpl, dykc_tail)
+
+  MediaWikiApi.done_pages[the_entry.article] = true
 end
 
 function updateTalkPage(article, id, dykc_tpl, dykc_tail, failed)

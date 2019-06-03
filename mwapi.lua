@@ -57,11 +57,7 @@ local function httpspost(url, postBody, reqheaders)
 end
 
 local function throwUserError(text)
-  local done_titles = {}
-  for k, _ in pairs(MediaWikiApi.done_pages) do
-    table.insert(done_titles, k)
-  end
-  print('{' .. table.concat(done_titles) .. '}')
+  print(json.encode(MediaWikiApi.done_pages))
   
   error(text)
 end
@@ -147,7 +143,6 @@ function MediaWikiApi.edit(title, text, summary)
 end
 
 function MediaWikiApi.editPend(title, text, summary, isPrepend)
-  if MediaWikiApi.done_pages[title] then return end
   print('\nEditing', title, text)
   --[[local arguments = {
     action = 'edit',
@@ -165,8 +160,6 @@ function MediaWikiApi.editPend(title, text, summary, isPrepend)
   local res_error = MediaWikiApi.performRequest(arguments).error
   if res_error then
     throwUserError('Edit failed. Reason: ' .. res_error.info)
-  else
-    MediaWikiApi.done_pages[title] = true
   end]]
 end
 
@@ -253,19 +246,29 @@ function MediaWikiApi.performHttpRequest(path, arguments, post) -- changed signa
   -- MediaWikiApi.trace('  Request body:', requestBody)
 
   local resultBody, resultHeaders
-  if post then
-    resultBody, resultHeaders = httpspost(path, requestBody, requestHeaders)
-  else
-    resultBody, resultHeaders = httpsget(path .. '?' .. requestBody, requestHeaders)
+  local dorequest = function(try_num)
+    if post then
+      resultBody, resultHeaders = httpspost(path, requestBody, requestHeaders)
+    else
+      resultBody, resultHeaders = httpsget(path .. '?' .. requestBody, requestHeaders)
+    end
   end
-
-  MediaWikiApi.trace('  Result status:', resultHeaders.status)
-
+  
+  for i = 1, 3 do
+    print('  Attempt ' .. i)
+    dorequest(i)
+    if resultHeaders.status ~= 'timeout' and resultHeaders.status ~= 'wantread' then
+      break
+    end
+  end
   if not resultHeaders.status or resultHeaders.status == 'closed' then
     throwUserError('No network connection')
   elseif resultHeaders.status ~= 200 then
     throwUserError('HttpError! Received HTTP status = ' .. resultHeaders.status)
   end
+
+  MediaWikiApi.trace('  Result status:', resultHeaders.status)
+
   MediaWikiApi.parseCookie(resultHeaders['set-cookie'])
   -- MediaWikiApi.trace('new cookie: '..resultHeaders['set-cookie'])
   -- MediaWikiApi.trace('  Result body:', resultBody)
