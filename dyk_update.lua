@@ -173,26 +173,28 @@ function getNewDykResult(old_entries, typeTable, entries)
 end
 
 function archivePassedArticles(the_entry, revid, dykc_tpl, dykc_tail)
-  local done_log = MediaWikiApi.done_pages[the_entry.article]
+  local art_name = the_entry.article
+  local done_log = MediaWikiApi.done_pages[art_name]
   if done_log then
     if done_log.complete then return end
   else
-    done_log = {}
+    MediaWikiApi.done_pages[art_name] = {}
+    done_log = MediaWikiApi.done_pages[art_name]
   end
   
   if not done_log.archive then
-    MediaWikiApi.trace('Archiving ' .. the_entry.article)
+    MediaWikiApi.trace('Archiving ' .. art_name)
     MediaWikiApi.editPend('Wikipedia:新条目推荐/存档/' .. os.date('!%Y年%m月'):gsub('0(%d[月日])', '%1'),
                           '* ' .. the_entry.question .. '\n', nil, true)
     MediaWikiApi.editPend('Wikipedia:新条目推荐/供稿/' .. os.date('!%Y年%m月%d日'):gsub('0(%d[月日])', '%1'),
                           '* ' .. the_entry.question .. '\n', nil, true)
-    MediaWikiApi.editPend('Wikipedia:新条目推荐/分类存档/未分类', ' [[' .. the_entry.article .. ']]') -- append
+    MediaWikiApi.editPend('Wikipedia:新条目推荐/分类存档/未分类', ' [[' .. art_name .. ']]') -- append
     done_log.archive = true
   end
   -- purge mainpage?
   if not done_log.talk then
-    MediaWikiApi.trace('Archive talk page of ' .. the_entry.article)
-    updateTalkPage(the_entry.article, revid, dykc_tpl, dykc_tail)
+    MediaWikiApi.trace('Archive talk page of ' .. art_name)
+    updateTalkPage(art_name, revid, dykc_tpl, dykc_tail)
     done_log.talk = true
   end
 
