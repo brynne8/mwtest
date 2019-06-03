@@ -173,18 +173,30 @@ function getNewDykResult(old_entries, typeTable, entries)
 end
 
 function archivePassedArticles(the_entry, revid, dykc_tpl, dykc_tail)
-  if MediaWikiApi.done_pages[the_entry.article] then return end
-  MediaWikiApi.trace('Archiving ' .. the_entry.article)
-  MediaWikiApi.editPend('Wikipedia:新条目推荐/存档/' .. os.date('!%Y年%m月'):gsub('0(%d[月日])', '%1'),
-                        '* ' .. the_entry.question .. '\n', nil, true)
-  MediaWikiApi.editPend('Wikipedia:新条目推荐/供稿/' .. os.date('!%Y年%m月%d日'):gsub('0(%d[月日])', '%1'),
-                        '* ' .. the_entry.question .. '\n', nil, true)
-  MediaWikiApi.editPend('Wikipedia:新条目推荐/分类存档/未分类', ' [[' .. the_entry.article .. ']]') -- append
+  local done_log = MediaWikiApi.done_pages[the_entry.article]
+  if done_log then
+    if done_log.complete then return end
+  else
+    done_log = {}
+  end
+  
+  if not done_log.archive then
+    MediaWikiApi.trace('Archiving ' .. the_entry.article)
+    MediaWikiApi.editPend('Wikipedia:新条目推荐/存档/' .. os.date('!%Y年%m月'):gsub('0(%d[月日])', '%1'),
+                          '* ' .. the_entry.question .. '\n', nil, true)
+    MediaWikiApi.editPend('Wikipedia:新条目推荐/供稿/' .. os.date('!%Y年%m月%d日'):gsub('0(%d[月日])', '%1'),
+                          '* ' .. the_entry.question .. '\n', nil, true)
+    MediaWikiApi.editPend('Wikipedia:新条目推荐/分类存档/未分类', ' [[' .. the_entry.article .. ']]') -- append
+    done_log.archive = true
+  end
   -- purge mainpage?
-  MediaWikiApi.trace('Archive talk page of ' .. the_entry.article)
-  updateTalkPage(the_entry.article, revid, dykc_tpl, dykc_tail)
+  if not done_log.talk then
+    MediaWikiApi.trace('Archive talk page of ' .. the_entry.article)
+    updateTalkPage(the_entry.article, revid, dykc_tpl, dykc_tail)
+    done_log.talk = true
+  end
 
-  MediaWikiApi.done_pages[the_entry.article] = true
+  done_log.complete = true
 end
 
 function updateTalkPage(article, id, dykc_tpl, dykc_tail, failed)
