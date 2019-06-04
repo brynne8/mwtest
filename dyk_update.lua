@@ -197,6 +197,15 @@ function archivePassedArticles(the_entry, revid, dykc_tpl, dykc_tail)
     updateTalkPage(art_name, revid, dykc_tpl, dykc_tail)
     done_log.talk = true
   end
+  if (the_entry.author or the_entry.author ~= '') and not done_log.upage then
+    local upage_title = 'User:' .. the_entry.author
+    local upage = MediaWikiApi.getCurrent(upage_title).content
+    upage:gsub('{{produceEncouragement|count=(%d)}}', function (s)
+      return '{{produceEncouragement|count=' .. (tonumber(s)+1) ..'}}'
+    end)
+    MediaWikiApi.edit(upage_title, upage)
+    done_log.utalk = true
+  end
 
   done_log.complete = true
 end
