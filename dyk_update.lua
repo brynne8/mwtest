@@ -9,6 +9,9 @@ local sha1 = require('sha1')
 
 local MAX_UPDATES = 3
 
+--local json = require('rapidjson')
+--MediaWikiApi.done_pages = json.decode([[json_dump]])
+
 function normalizeTpl(tpl_str)
   local template = {}
   for line in tpl_str:gmatch('[^\n]+') do
@@ -188,7 +191,7 @@ function archivePassedArticles(the_entry, revid, dykc_tpl, dykc_tail)
                           '* ' .. the_entry.question .. '\n', nil, true)
     MediaWikiApi.editPend('Wikipedia:新条目推荐/供稿/' .. os.date('!%Y年%m月%d日'):gsub('0(%d[月日])', '%1'),
                           '* ' .. the_entry.question .. '\n', nil, true)
-    MediaWikiApi.editPend('Wikipedia:新条目推荐/分类存档/未分类', ' [[' .. art_name .. ']]') -- append
+    -- MediaWikiApi.editPend('Wikipedia:新条目推荐/分类存档/未分类', ' [[' .. art_name .. ']]') -- append (*too slow*)
     done_log.archive = true
   end
   -- purge mainpage?
@@ -197,7 +200,7 @@ function archivePassedArticles(the_entry, revid, dykc_tpl, dykc_tail)
     updateTalkPage(art_name, revid, dykc_tpl, dykc_tail)
     done_log.talk = true
   end
-  if (the_entry.author or the_entry.author ~= '') and not done_log.upage then
+  if (the_entry.author and the_entry.author ~= '') and not done_log.upage then
     local upage_title = 'User:' .. the_entry.author
     local upage = MediaWikiApi.getCurrent(upage_title).content
     upage:gsub('{{produceEncouragement|count=(%d)}}', function (s)

@@ -159,7 +159,11 @@ function MediaWikiApi.editPend(title, text, summary, isPrepend)
   
   local res_error = MediaWikiApi.performRequest(arguments).error
   if res_error then
-    throwUserError('Edit failed. Reason: ' .. res_error.info)
+    if res_error.code == 'editconflict' then
+      MediaWikiApi.trace(res_error.info)
+    else
+      throwUserError('Edit failed. Reason: ' .. res_error.info)
+    end
   end]]
 end
 
