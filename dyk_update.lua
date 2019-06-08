@@ -184,16 +184,7 @@ function archivePassedArticles(the_entry, revid, dykc_tpl, dykc_tail)
     MediaWikiApi.done_pages[art_name] = {}
     done_log = MediaWikiApi.done_pages[art_name]
   end
-  
-  if not done_log.archive then
-    MediaWikiApi.trace('Archiving ' .. art_name)
-    MediaWikiApi.editPend('Wikipedia:新条目推荐/存档/' .. os.date('!%Y年%m月'):gsub('0(%d[月日])', '%1'),
-                          '* ' .. the_entry.question .. '\n', nil, true)
-    MediaWikiApi.editPend('Wikipedia:新条目推荐/供稿/' .. os.date('!%Y年%m月%d日'):gsub('0(%d[月日])', '%1'),
-                          '* ' .. the_entry.question .. '\n', nil, true)
-    -- MediaWikiApi.editPend('Wikipedia:新条目推荐/分类存档/未分类', ' [[' .. art_name .. ']]') -- append (*too slow*)
-    done_log.archive = true
-  end
+
   -- purge mainpage?
   if not done_log.talk then
     MediaWikiApi.trace('Archive talk page of ' .. art_name)
@@ -384,10 +375,17 @@ function mainTask()
     local update_ones, old_ones = getNewDykResult(dyk_entries, typeTable, new_dyk_entries)
     -- check if we need to update the dyk
     if update_ones then
+      local archive_str = ''
       for i, v in ipairs(update_ones) do
         remove_hash[v.entry.hash] = true
         new_dykc_list[v.index].removed = true
+        archive_str = archive_str .. ('* ' .. v.entry.question .. '\n')
       end
+      MediaWikiApi.trace('Archiving')
+      MediaWikiApi.editPend('Wikipedia:新条目推荐/存档/' .. os.date('!%Y年%m月'):gsub('0(%d[月日])', '%1'),
+                            archive_str, nil, true)
+      MediaWikiApi.editPend('Wikipedia:新条目推荐/供稿/' .. os.date('!%Y年%m月%d日'):gsub('0(%d[月日])', '%1'),
+                            archive_str, nil, true)
       dyk_entries = Utils.tableConcat(table.map(update_ones, function(x)
         archivePassedArticles(x.entry, dykc_page.revid, x.dykc_tpl, x.dykc_tail)
         return x.entry
