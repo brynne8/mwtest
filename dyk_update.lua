@@ -193,11 +193,20 @@ function archivePassedArticles(the_entry, revid, dykc_tpl, dykc_tail)
   end
   if (the_entry.author and the_entry.author ~= '') and not done_log.upage then
     local upage_title = 'User:' .. the_entry.author
-    local upage = MediaWikiApi.getCurrent(upage_title).content
-    upage = upage:gsub('{{produceEncouragement|count=(%d+)}}', function (s)
-      return '{{produceEncouragement|count=' .. (tonumber(s)+1) ..'}}'
-    end)
-    MediaWikiApi.edit(upage_title, upage)
+    local upage = MediaWikiApi.getCurrent(upage_title)
+    if upage then -- if no userpage, don't try to create
+      upage = upage.content
+      local foundTpl = false
+      upage = upage:gsub('{{produceEncouragement|count=(%d+)}}', function (s)
+        foundTpl = true
+        return '{{produceEncouragement|count=' .. (tonumber(s)+1) ..'}}'
+      end, 1)
+      if foundTpl then
+        MediaWikiApi.edit(upage_title, upage)
+      else
+        MediaWikiApi.editPend(upage_title, '{{produceEncouragement|count=1}}', nil, true)
+      end
+    end
     done_log.upage = true
   end
 
