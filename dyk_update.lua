@@ -287,7 +287,7 @@ function hashRemoval(hash_dict)
     MediaWikiApi.edit('Wikipedia:新条目推荐/候选', dykc_head .. concatTimedEntries(new_dykc_list) .. dykc_final)
   end) then
     MediaWikiApi.trace('Save failed. Try again...')
-    hashRemoval(remove_hash)
+    hashRemoval(hash_dict)
   end
 end
 
