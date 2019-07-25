@@ -1,7 +1,7 @@
 # mwtest
 Building a MediaWiki bot in Lua
 
-# My environment
+## My environment
 - Windows 7 x64
 - ZeroBrane + LuaDist
 - Lua 5.1.5
