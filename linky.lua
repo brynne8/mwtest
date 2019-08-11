@@ -150,7 +150,7 @@ function check_groupcard(uinfo_str, group_id, qq_num)
   else
     local group_card = g2u:iconv(uinfo_str:sub(start, start + strlen - 1))
     if not group_card:match('^User:') and not group_card:match('^学习:') and
-      not group_card:match('^Bot:') then
+      not group_card:match('^Bot:') and not group_card:match('^管%-') then
       sendToServer('GroupMessage ' .. group_id .. ' ' .. 
       mime.b64(u2g:iconv('[CQ:at,qq=' .. qq_num .. '] 您的群名片不符合规定，请按群公告要求修改群名片')) .. ' 0')
     end
@@ -159,7 +159,9 @@ end
 
 function processGroupMsg(data)
   if enabled_groups[data[2]] then
-    check_groupcard(mime.unb64(data[7]), data[2], data[3])
+    if data[3] ~= '1000000' then
+      check_groupcard(mime.unb64(data[7]), data[2], data[3])
+    end
     local msg = g2u:iconv(mime.unb64(data[4])):gsub('&#91;', '['):gsub('&#93;', ']'):gsub('&amp;', '&')
     if spamwords(msg, data[2], data[3]) then return end
     if reply(msg, data[2]) then return end
