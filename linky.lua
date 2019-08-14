@@ -136,7 +136,7 @@ function spamwords(msg, group_id, qq_num)
   end
 end
 
-local bad_patterns = { '上维基娘', '百度.*词条' }
+local bad_patterns = { '上维基娘', '百度.-词条', '词典.-词条' }
 
 local replylist = {
   ['^表白vva$'] = '谢谢。'
@@ -187,7 +187,7 @@ function check_groupcard(uinfo_str, group_id, qq_num)
     end
     if not pass then
       sendToServer('GroupMessage ' .. group_id .. ' ' .. 
-      mime.b64(u2g:iconv('[CQ:at,qq=' .. qq_num .. '] 您的群名片不符合规定，请按群公告要求修改群名片')) .. ' 0')
+        mime.b64(u2g:iconv('[CQ:at,qq=' .. qq_num .. '] 您的群名片不符合规定，请按群公告要求修改群名片')) .. ' 0')
     end
   end
 end
@@ -216,7 +216,11 @@ end
 
 function checkBlacklist(data)
   if blacklist[data[3]] then
-    sendToServer('GroupAddRequest ' .. data[5] .. ' 1 2' .. mime.b64(u2g:iconv('黑名单成员自动拒绝')))
+    if data[1] == 'RequestAddGroup' then
+      sendToServer('GroupAddRequest ' .. data[5] .. ' 1 2' .. mime.b64(u2g:iconv('黑名单成员自动拒绝')))
+    elseif data[1] == 'GroupMessage' then
+      sendToServer('GroupKick ' .. data[2] .. ' ' .. data[3] .. ' 0')
+    end
     return true
   end
 end
@@ -245,7 +249,7 @@ function processGroupMsg(data)
     
     if spamwords(msg, data[2], data[3]) then return end
     if linky(msg, data[2]) then return end
-    if reply(msg, data[2]) then return end
+    if op ~= '' and reply(msg, data[2]) then return end
   end
 end
 
