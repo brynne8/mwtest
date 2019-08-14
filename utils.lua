@@ -81,4 +81,23 @@ function string.split(str, pat)
    return t
 end
 
+--- URL-encode a string according to RFC 3986.
+-- Based on http://lua-users.org/wiki/StringRecipes
+-- @param str the string to encode
+-- @return the URL-encoded string
+function M.urlEncode(str)
+  if str then
+    str = string.gsub(str, '\n', '\r\n')
+    str =
+      string.gsub(
+      str,
+      '([^%w:/%-%_%.%~])',
+      function(c)
+        return string.format('%%%02X', string.byte(c))
+      end
+    )
+  end
+  return str
+end
+
 return M

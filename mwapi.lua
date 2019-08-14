@@ -125,8 +125,8 @@ function MediaWikiApi.getEditToken()
 end
 
 function MediaWikiApi.edit(title, text, summary)
-  print('\nEditing', title, text)
-  --[[local arguments = {
+  --print('\nEditing', title, text)
+  local arguments = {
     action = 'edit',
     title = title,
     text = text,
@@ -139,12 +139,12 @@ function MediaWikiApi.edit(title, text, summary)
   local res_error = MediaWikiApi.performRequest(arguments).error
   if res_error then
     throwUserError('Edit failed. Reason: ' .. res_error.info)
-  end]]
+  end
 end
 
 function MediaWikiApi.editPend(title, text, summary, isPrepend)
-  print('\nEditing', title, text)
-  --[[local arguments = {
+  --print('\nEditing', title, text)
+  local arguments = {
     action = 'edit',
     title = title,
     summary = summary,
@@ -164,7 +164,7 @@ function MediaWikiApi.editPend(title, text, summary, isPrepend)
     else
       throwUserError('Edit failed. Reason: ' .. res_error.info)
     end
-  end]]
+  end
 end
 
 function MediaWikiApi.uploadfile(filepath, pagetext, filename, overwrite, comment)
@@ -197,25 +197,6 @@ end
 -- Code adapted from LrMediaWiki:
 MediaWikiApi.trace = function(...)
   print(...)
-end
-
---- URL-encode a string according to RFC 3986.
--- Based on http://lua-users.org/wiki/StringRecipes
--- @param str the string to encode
--- @return the URL-encoded string
-function MediaWikiApi.urlEncode(str)
-  if str then
-    str = string.gsub(str, '\n', '\r\n')
-    str =
-      string.gsub(
-      str,
-      '([^%w%-%_%.%~])',
-      function(c)
-        return string.format('%%%02X', string.byte(c))
-      end
-    )
-  end
-  return str
 end
 
 --- Convert HTTP arguments to a URL-encoded request body.

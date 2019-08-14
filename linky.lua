@@ -4,7 +4,6 @@ Dependencies:
 * timerwheel: Pure Lua timerwheel implementation
 * lua-iconv: Lua bindings for POSIX iconv
 ]]
-local MediaWikiApi = require('mwtest/mwapi')
 local Utils = require('mwtest/utils')
 local socket = require('socket')
 local mime = require('mime')
@@ -60,7 +59,6 @@ local enabled_groups = { ['10000'] = true }
 
 function sendClientHello()
   sendToServer('ClientHello 5678')
-  print('ClientHello sent.')
   timer_id = wheel:set(280, sendClientHello)
 end
 
@@ -68,6 +66,19 @@ local cqclient = socket.udp()
 cqclient:setsockname('127.0.0.1', '5678')
 cqclient:settimeout(1)
 print('Client started')
+
+local transwiki = {
+  ['c'] = 'commons.wikimedia.org',
+  ['commons'] = 'commons.wikimedia.org',
+  ['en'] = 'en.wikipedia.org',
+  ['d'] = 'www.wikidata.org',
+  ['de'] = 'de.wikipedia.org',
+  ['ja'] = 'ja.wikipedia.org',
+  ['ko'] = 'ko.wikipedia.org',
+  ['m'] = 'meta.wikimedia.org',
+  ['q'] = 'zh.wikiquote.org',
+  ['s'] = 'zh.wikisource.org'
+}
 
 function linky(msg, group_id)
   msg = msg:gsub('%[CQ:emoji,id=(%d+)%]', function(m1)
@@ -78,15 +89,22 @@ function linky(msg, group_id)
   end)
   local wikilink = msg:match('%[%[(.-)%]%]')
   if wikilink then
-    sendToServer('GroupMessage ' .. group_id .. ' ' ..
-      mime.b64(u2g:iconv('https://zh.wikipedia.org/wiki/' .. MediaWikiApi.urlEncode(wikilink))) .. ' 0')
-    return
+    local trans_key, trans_val = wikilink:match('^(.-):(.*)')
+    local remote_url = transwiki[trans_key]
+    if remote_url then
+      sendToServer('GroupMessage ' .. group_id .. ' ' ..
+        mime.b64(u2g:iconv('https://' .. remote_url .. '/wiki/' .. Utils.urlEncode(trans_val))) .. ' 0')
+    else
+      sendToServer('GroupMessage ' .. group_id .. ' ' ..
+        mime.b64(u2g:iconv('https://zh.wikipedia.org/wiki/' .. Utils.urlEncode(wikilink))) .. ' 0')
+    end
+    return true
   end
   wikilink = msg:match('{{([^|]*)|?.*}}')
   if wikilink then
     sendToServer('GroupMessage ' .. group_id .. ' ' ..
-      mime.b64(u2g:iconv('https://zh.wikipedia.org/wiki/Template:' .. MediaWikiApi.urlEncode(wikilink))) .. ' 0')
-    return
+      mime.b64(u2g:iconv('https://zh.wikipedia.org/wiki/Template:' .. Utils.urlEncode(wikilink))) .. ' 0')
+    return true
   end
 end
 
@@ -118,11 +136,16 @@ function spamwords(msg, group_id, qq_num)
   end
 end
 
+local bad_patterns = { '上维基娘', '百度.*词条' }
+
 local replylist = {
   ['^表白vva$'] = '谢谢。'
 }
 
 function reply(msg, group_id)
+  for _, v in ipairs(bad_patterns) do
+    if msg:match(v) then return end
+  end
   for k, v in pairs(replylist) do
     for _, pat in ipairs(k:split('|')) do
       local result = msg:match(pat)
@@ -134,7 +157,7 @@ function reply(msg, group_id)
   end
 end
 
-local dont_checkcard = { ['10000'] = true }
+local dont_checkcard = { ['308617666'] = true }
 
 function check_groupcard(uinfo_str, group_id, qq_num)
   if dont_checkcard[group_id] then
@@ -149,21 +172,80 @@ function check_groupcard(uinfo_str, group_id, qq_num)
       mime.b64(u2g:iconv('[CQ:at,qq=' .. qq_num .. '] 请按群公告要求修改群名片')) .. ' 0')
   else
     local group_card = g2u:iconv(uinfo_str:sub(start, start + strlen - 1))
-    if not group_card:match('^User:') and not group_card:match('^学习:') and
-      not group_card:match('^Bot:') and not group_card:match('^管%-') then
+    local ugroup, uname = group_card:match('^(.-):%s*([^#]*[^#%s])')
+    local pass = false
+    if ugroup and uname ~= '' and
+      (ugroup == 'User' or ugroup == '学习' or ugroup == 'Bot' or ugroup == '管-User') then
+      if ugroup == 'User' then
+        if not uname:match('[@:%(%)]') and not (uname:match('^%d*$')) and
+          not (uname:match('[\228-\233][\128-\191][\128-\191]') and uname:match('%a')) then
+          pass = true
+        end
+      else
+        pass = true
+      end
+    end
+    if not pass then
       sendToServer('GroupMessage ' .. group_id .. ' ' .. 
       mime.b64(u2g:iconv('[CQ:at,qq=' .. qq_num .. '] 您的群名片不符合规定，请按群公告要求修改群名片')) .. ' 0')
     end
   end
 end
 
+local op_admins = { ['10000'] = true }
+local blacklist = {}
+local bl_string = ''
+
+function setBlacklist(op, qq_num)
+  if op == 'add' then
+    blacklist[qq_num] = true
+    bl_string = bl_string .. qq_num .. '\n'
+    local f = io.open("mwtest/bl.txt", "a")
+    f:write(qq_num .. '\n')
+    f:close()
+  elseif op == 'remove' then
+    blacklist[qq_num] = nil
+    bl_string = bl_string:gsub(qq_num .. '\n', '', 1)
+    local f = io.open("mwtest/bl.txt", "w")
+    f:write(bl_string)
+    f:close()
+  else
+    error('op is not specified')
+  end
+end
+
+function checkBlacklist(data)
+  if blacklist[data[3]] then
+    sendToServer('GroupAddRequest ' .. data[5] .. ' 1 2' .. mime.b64(u2g:iconv('黑名单成员自动拒绝')))
+    return true
+  end
+end
+
+function executeOp(group_id, op, params)
+  if op == 'b' or op == 'block' then
+    sendToServer('GroupKick ' .. group_id .. ' ' .. params .. ' 0')
+    setBlacklist('add', params)
+    sendToServer('GroupMessage ' .. group_id .. ' ' .. mime.b64(u2g:iconv(params .. '已加入黑名单')) .. ' 0')
+  elseif op == 'ub' or op == 'unblock' then
+    setBlacklist('remove', params)
+    sendToServer('GroupMessage ' .. group_id .. ' ' .. mime.b64(u2g:iconv(params .. '已移除黑名单')) .. ' 0')
+  end
+end
+
 function processGroupMsg(data)
   if enabled_groups[data[2]] and data[3] ~= '1000000' then
+    if checkBlacklist(data) then return end
     check_groupcard(mime.unb64(data[7]), data[2], data[3])
     local msg = g2u:iconv(mime.unb64(data[4])):gsub('&#91;', '['):gsub('&#93;', ']'):gsub('&amp;', '&')
+    -- operations
+    local op, params = msg:match('^!(.-) (.*)$')
+    if op and op_admins[data[3]] then
+      executeOp(data[2], op, params)
+    end
+    
     if spamwords(msg, data[2], data[3]) then return end
+    if linky(msg, data[2]) then return end
     if reply(msg, data[2]) then return end
-    linky(msg, data[2])
   end
 end
 
@@ -176,6 +258,15 @@ function processNewMember(data)
   end
 end
 
+-- Main Loop
+local bl_file = io.open("mwtest/bl.txt", "r")
+for line in bl_file:lines() do
+  blacklist[line] = true
+end
+bl_file:seek('set')
+bl_string = bl_file:read('*a')
+bl_file:close()
+
 sendClientHello()
 
 while true do
@@ -186,6 +277,8 @@ while true do
       processGroupMsg(data)
     elseif data[1] == 'GroupMemberIncrease' then
       processNewMember(data)
+    elseif data[1] == 'RequestAddGroup' then
+      checkBlacklist(data)
     else
       -- print(recvbuff, recvip, recvport)
     end
