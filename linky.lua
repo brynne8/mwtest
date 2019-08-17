@@ -59,6 +59,7 @@ local enabled_groups = { ['10000'] = true }
 
 function sendClientHello()
   sendToServer('ClientHello 5678')
+  print(os.date(), 'Memory count: ', collectgarbage("count"))
   timer_id = wheel:set(280, sendClientHello)
 end
 
@@ -87,7 +88,7 @@ function linky(msg, group_id)
       return utf8char(code)
     end
   end)
-  local wikilink = msg:match('%[%[(.-)%]%]')
+  local wikilink = msg:match('%[%[([^|%[%]]+)|?[^%[%]]-%]%]')
   if wikilink then
     local trans_key, trans_val = wikilink:match('^(.-):(.*)')
     local remote_url = transwiki[trans_key]
@@ -100,7 +101,7 @@ function linky(msg, group_id)
     end
     return true
   end
-  wikilink = msg:match('{{([^|]*)|?.*}}')
+  wikilink = msg:match('{{([^|}]*)|?[^}]-}}')
   if wikilink then
     sendToServer('GroupMessage ' .. group_id .. ' ' ..
       mime.b64(u2g:iconv('https://zh.wikipedia.org/wiki/Template:' .. Utils.urlEncode(wikilink))) .. ' 0')
@@ -157,10 +158,18 @@ function reply(msg, group_id)
   end
 end
 
+local cmd_replylist = {
+  ping = 'pong'
+}
+
 local dont_checkcard = { ['308617666'] = true }
 
 function check_groupcard(uinfo_str, group_id, qq_num)
-  if dont_checkcard[group_id] then
+  if not uinfo_str or dont_checkcard[group_id] then
+    return
+  end
+  if uinfo_str:len() < 17 then
+    print(group_id, qq_num, uinfo_str)
     return
   end
   local strlen = bit.lshift(uinfo_str:byte(17), 8) + uinfo_str:byte(18)
@@ -188,6 +197,8 @@ function check_groupcard(uinfo_str, group_id, qq_num)
     if not pass then
       sendToServer('GroupMessage ' .. group_id .. ' ' .. 
         mime.b64(u2g:iconv('[CQ:at,qq=' .. qq_num .. '] 您的群名片不符合规定，请按群公告要求修改群名片')) .. ' 0')
+    else
+      return ugroup, uname
     end
   end
 end
@@ -236,10 +247,12 @@ function executeOp(group_id, op, params)
   end
 end
 
+local last_atme = 0
+
 function processGroupMsg(data)
   if enabled_groups[data[2]] and data[3] ~= '1000000' then
     if checkBlacklist(data) then return end
-    check_groupcard(mime.unb64(data[7]), data[2], data[3])
+    local ugroup, uname = check_groupcard(mime.unb64(data[7]), data[2], data[3])
     local msg = g2u:iconv(mime.unb64(data[4])):gsub('&#91;', '['):gsub('&#93;', ']'):gsub('&amp;', '&')
     -- operations
     local op, params = msg:match('^!(.-) (.*)$')
@@ -248,8 +261,29 @@ function processGroupMsg(data)
     end
     
     if spamwords(msg, data[2], data[3]) then return end
+    local cmd = msg:match('^/(%w*)')
+    if cmd then
+      if cmd == 'info' then
+        local cmdlist = '当前可用所有命令有：\n'
+        for k in pairs(cmd_replylist) do
+          cmdlist = cmdlist .. '/' .. k .. ' '
+        end
+        sendToServer('GroupMessage ' .. data[2] .. ' ' .. mime.b64(u2g:iconv(cmdlist)) .. ' 0')
+        return
+      elseif cmd_replylist[cmd] then
+        sendToServer('GroupMessage ' .. data[2] .. ' ' .. mime.b64(u2g:iconv(cmd_replylist[cmd])) .. ' 0')
+        return
+      end
+    end
     if linky(msg, data[2]) then return end
-    if op ~= '' and reply(msg, data[2]) then return end
+    if (op ~= '') and reply(msg, data[2]) then return end
+    if ugroup ~= 'User' and ugroup ~= '管-User' and os.time() - last_atme > 600 then
+      if msg:match('^%[CQ:at,qq=10000%]') then
+        last_atme = os.time()
+        sendToServer('GroupMessage ' .. data[2] .. ' ' ..
+          mime.b64(u2g:iconv('我是群管机器人Viviane，我不是人工智能，不能聊天。[CQ:face,id=21]')) .. ' 0')
+      end
+    end
   end
 end
 
