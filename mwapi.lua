@@ -12,6 +12,7 @@ Dependencies:
 * lua-luajson: JSON parser/encoder for Lua
 * lua-multipart-post: HTTP Multipart Post helper
 ]]
+local Utils = require('mwtest/utils')
 local https = require('ssl.https')
 local json = require('rapidjson')
 local ltn12 = require('ltn12')
@@ -210,7 +211,7 @@ function MediaWikiApi.createRequestBody(arguments)
     else
       body = ''
     end
-    body = body .. MediaWikiApi.urlEncode(key) .. '=' .. MediaWikiApi.urlEncode(value)
+    body = body .. Utils.urlEncode(key) .. '=' .. Utils.urlEncode(value)
   end
   return body or ''
 end
