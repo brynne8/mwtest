@@ -28,9 +28,9 @@ local spamlist = { '六四', '天安门', '暴动', '逃犯', '港独', '法轮'
   '庆红', '镕基', '洪志', '反送中', '蛤', '中华民国', '瓜瓜', '仲勋', '国锋', '光复', '割让', 
   '晓波', '克强', '韩正', '熙来', '紫阳', '耀邦', '明泽', '柴玲', '王丹', '民运', '主运', '反共',
   '吾尔开希', '艾未未', '会运', '出征', '新疆', '北戴河', '乌鲁木齐', '草榴', '防火长城', '丽媛',
-  '封锁网站', '新唐人', '达赖' }
+  '普选', '封锁网站', '新唐人', '达赖' }
 
-local content_black = { '六四', '学运', '学潮', '社运', '会运', '民运', '主运', '反共', 
+local content_black = { '六四', '学运', '学潮', '社运', '会运', '民运', '主运', '反共', '逃犯条例',
   '示威', '天安门', '异议', '持不同政见' }
 
 local topview_data = {
@@ -104,9 +104,6 @@ function getTopView()
           topview_data.new_list[id].extract = res.extract and res.extract:gsub('^\n*', '')
         end
       end)
-      if id == 300 then
-        break
-      end
       if id % 10 == 0 then
         print(id)
         copas.sleep(10)
@@ -170,10 +167,10 @@ while true do
           end
         end
         topview_data.list = topview_data.new_list
+        topview_data.new_list = {}
         local f = io.open("mwtest/pop.txt", "wb")
         f:write(json.encode(topview_data))
         f:close()
-        topview_data.new_list = {}
       end
     else
       copas.step()
