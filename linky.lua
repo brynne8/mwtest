@@ -42,32 +42,6 @@ local function utf8char(unicode)
   error 'Unicode cannot be greater than U+10FFFF!'
 end
 
-local iconv = require('iconv')
-local g2u = iconv.new('utf-8', 'gb18030')
-local u2g = iconv.new('gb18030', 'utf-8')
-
-local cqserver = socket.udp()
-cqserver:setpeername('127.0.0.1', '11235')
-
-function sendToServer(data)
-  print(data)
-  cqserver:send(data)
-end
-
-local timer_id
-local enabled_groups = { ['10000'] = true }
-
-function sendClientHello()
-  sendToServer('ClientHello 5678')
-  print(os.date(), 'Memory count: ', collectgarbage("count"))
-  timer_id = wheel:set(280, sendClientHello)
-end
-
-local cqclient = socket.udp()
-cqclient:setsockname('127.0.0.1', '5678')
-cqclient:settimeout(1)
-print('Client started')
-
 local transwiki = {
   ['c'] = 'commons.wikimedia.org',
   ['commons'] = 'commons.wikimedia.org',
@@ -77,9 +51,39 @@ local transwiki = {
   ['ja'] = 'ja.wikipedia.org',
   ['ko'] = 'ko.wikipedia.org',
   ['m'] = 'meta.wikimedia.org',
+  ['mirror'] = 'zh.wikipedia-mirror.org',
   ['q'] = 'zh.wikiquote.org',
   ['s'] = 'zh.wikisource.org'
 }
+
+local iconv = require('iconv')
+local g2u = iconv.new('utf-8', 'gb18030')
+local u2g = iconv.new('gb18030', 'utf-8')
+
+local cqserver = socket.udp()
+cqserver:setpeername('127.0.0.1', '11235')
+
+local cqclient = socket.udp()
+cqclient:setsockname('127.0.0.1', '5678')
+cqclient:settimeout(1)
+print('Client started')
+
+local feedserver = socket.udp()
+feedserver:setpeername('127.0.0.1', '5680')
+
+local timer_id
+local enabled_groups = { ['10000'] = true }
+
+function sendToServer(data)
+  print(data)
+  cqserver:send(data)
+end
+
+function sendClientHello()
+  sendToServer('ClientHello 5678')
+  print(os.date(), 'Memory count: ', collectgarbage("count"))
+  timer_id = wheel:set(280, sendClientHello)
+end
 
 function linky(msg, group_id)
   msg = msg:gsub('%[CQ:emoji,id=(%d+)%]', function(m1)
@@ -270,6 +274,8 @@ function processGroupMsg(data)
         end
         sendToServer('GroupMessage ' .. data[2] .. ' ' .. mime.b64(u2g:iconv(cmdlist)) .. ' 0')
         return
+      elseif cmd == 'popular' then
+        feedserver:send('RandomPopularArticle ' .. data[2])
       elseif cmd_replylist[cmd] then
         sendToServer('GroupMessage ' .. data[2] .. ' ' .. mime.b64(u2g:iconv(cmd_replylist[cmd])) .. ' 0')
         return
@@ -307,6 +313,11 @@ bl_file:close()
 
 sendClientHello()
 
+local last_feed = {}
+for k in pairs(enabled_groups) do
+  last_feed[k] = 0
+end
+
 while true do
   local recvbuff, recvip, recvport = cqclient:receivefrom()
   if recvbuff then
@@ -317,6 +328,21 @@ while true do
       processNewMember(data)
     elseif data[1] == 'RequestAddGroup' then
       checkBlacklist(data)
+    elseif data[1] == 'Feed' then
+      if os.time() - last_feed[data[2]] > 60 then
+        if data[3] == '1' then
+          last_feed[data[2]] = os.time()
+          sendToServer('GroupMessage ' .. data[2] .. ' ' ..
+            mime.b64(u2g:iconv(data[5] .. '（昨日浏览量：' .. data[7] .. '）\n\n' .. data[6] .. '\n' ..
+              'https://zh.wikipedia.org/wiki/' .. Utils.urlEncode(data[4]))) .. ' 0')
+        else
+          sendToServer('GroupMessage ' .. data[2] .. ' ' ..
+            mime.b64(u2g:iconv('数据还没下载好呢，等下喔~')) .. ' 0')
+        end
+      else
+        sendToServer('GroupMessage ' .. data[2] .. ' ' ..
+          mime.b64(u2g:iconv('热门条目功能每分钟只能用1次喔~')) .. ' 0')
+      end
     else
       -- print(recvbuff, recvip, recvport)
     end
