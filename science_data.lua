@@ -55,7 +55,7 @@ function getSummary(titles)
     MediaWikiApi.createRequestBody {
       action = 'query',
       prop = 'extracts|info',
-      inprop = 'displaytitle',
+      inprop = 'varianttitles',
       exintro = 1,
       titles = titles,
       format = 'json',
@@ -119,8 +119,8 @@ for art_name in pairs(science_dict) do
     taskset:addthread(function()
       local pages = getSummary(temp_titles)
       for _, v in ipairs(pages) do
-        science_dict[v.title] = {
-          disp_name = v.displaytitle,
+        science_dict[v.title:gsub(' ', '_')] = {
+          disp_name = v.varianttitles['zh-cn'],
           extract = v.extract == '' and '无摘要' or v.extract
         }
       end
