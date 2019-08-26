@@ -3,10 +3,11 @@ Author: Alexander Misel
 ]]
 local copas = require('copas')
 local chttp = require('copas.http')
+local limit = require("copas.limit")
 local socket = require('socket')
 local MediaWikiApi = require('mwtest/mwapi')
 local Utils = require('mwtest/utils')
-local json = require('rapidjson')
+local json = require('cjson')
 
 local lkserver = socket.udp()
 lkserver:setpeername('127.0.0.1', '5678')
@@ -34,6 +35,12 @@ local content_black = { '六四', '学运', '学潮', '社运', '会运', '民�
   '示威', '天安门', '异议', '持不同政见' }
 
 local topview_data = {
+  last_date = 0,
+  list = nil,
+  new_list = {} -- after a complete check would assign to list
+}
+
+local science_data = {
   last_date = 0,
   list = nil,
   new_list = {} -- after a complete check would assign to list
@@ -68,7 +75,16 @@ function chttpsget(req_url)
   }
 
   MediaWikiApi.trace('  Result status:', code)
-  return table.concat(res), code
+  return table.concat(res), code, resheaders
+end
+
+function getSummary(art_name)
+  local res, code = chttpsget('https://zh.wikipedia.org/api/rest_v1/page/summary/'
+    .. art_name)
+  if code == 200 then
+    res = json.decode(res)
+    return res.titles.display, res.extract and res.extract:gsub('\n*', '')
+  end
 end
 
 function getTopView()
@@ -90,30 +106,23 @@ function getTopView()
   end
   
   local raw_topview = json.decode(res).items[1].articles
+  local taskset = limit.new(10)
   for _, v in ipairs(raw_topview) do
     local art_name = v.article
     if not art_name:match(':') and not list_match(spamlist, art_name) then
       local id = #topview_data.new_list + 1
       topview_data.new_list[id] = { article = art_name, views = v.views }
-      copas.addthread(function()
-        local res, code = chttpsget('https://zh.wikipedia.org/api/rest_v1/page/summary/'
-          .. Utils.urlEncode(art_name))
-        if code == 200 then
-          res = json.decode(res)
-          topview_data.new_list[id].disp_name = res.titles.display
-          topview_data.new_list[id].extract = res.extract and res.extract:gsub('^\n*', '')
-        end
+      taskset:addthread(function()
+        local disp_name, extract = getSummary(art_name)
+        topview_data.new_list[id].disp_name = disp_name
+        topview_data.new_list[id].extract = extract
+        if id % 10 == 0 then print(id) end
       end)
-      if id % 10 == 0 then
-        print(id)
-        copas.sleep(10)
-      end
     end
   end
 end
 
 function randomPopularArt(data)
-  -- not implemented
   if not topview_data.list then
     sendToServer('Feed ' .. data[2] .. ' 0')
   else
@@ -124,11 +133,30 @@ function randomPopularArt(data)
   end
 end
 
+function randomScienceArt(data)
+  if not science_data.list then
+    sendToServer('Feed ' .. data[2] .. ' 0')
+  else
+    local id = math.random(#science_data.list)
+    local item = science_data.list[id]
+    sendToServer('Feed ' .. data[2] .. ' 1 ' .. item.article .. ' ' .. item.disp_name:gsub(' ', '_') .. 
+      ' ' .. item.extract:gsub(' ', '\255'))
+  end
+end
+
 local pop_file = io.open("mwtest/pop.txt", "rb")
 local pop_str = pop_file:read('*a')
-if pop_str:len() > 10 then
+if pop_str:len() > 100 then
   topview_data = json.decode(pop_str)
   print(#topview_data.list)
+end
+pop_file:close()
+
+pop_file = io.open("mwtest/sci.txt", "rb")
+pop_str = pop_file:read('*a')
+if pop_str:len() > 100 then
+  science_data = json.decode(pop_str)
+  print(#science_data.list)
 end
 pop_file:close()
 
@@ -139,15 +167,15 @@ while true do
     local data = recvbuff:split(' ')
     if data[1] == 'RandomPopularArticle' then
       randomPopularArt(data)
+    elseif data[1] == 'RandomScienceArticle' then
+      randomScienceArt(data)
     else
       -- print(recvbuff, recvip, recvport)
     end
   else
     local curdate = os.date('*t')
     if topview_data.last_date ~= curdate.day - 1 and curdate.hour >= 10 then
-      copas.addthread(function ()
-        getTopView()
-      end)
+      copas.addthread(getTopView)
     end
     if copas.finished() then
       local new_len = #topview_data.new_list
