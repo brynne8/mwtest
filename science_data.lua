@@ -47,6 +47,15 @@ function stripHtmlTags(extract)
                   end)
                 end)
   first_para = first_para:gsub('%b<>', '')
+
+  for uchar, end_pos in first_para:gmatch('([%z\1-\127\194-\244][\128-\191]*)()') do
+    if uchar == '。' or uchar == '：' then
+      if end_pos > 450 then
+        first_para = first_para:sub(1, end_pos - 1)
+        break
+      end
+    end
+  end
   return first_para
 end
 
