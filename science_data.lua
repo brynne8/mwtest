@@ -36,13 +36,17 @@ end
 
 function stripHtmlTags(extract)
   if not extract then return '' end
-  local first_para = extract:match('<p>(.-)\n</p>')
+  local first_para = extract:match('<p>(.-)\n?</p>')
   if not first_para then return '' end
   first_para = first_para:gsub('<span><span><math.-alttext="(.-)".-</span></span>', 
                 function(p1)
                   return p1:gsub('%b{}', function (p2)
                     return p2:gsub('^{\\displaystyle (.-)}$', function (p3)
-                      return '$' .. p3:gsub('^{(.*)}$', '%1') .. '$'
+                      if p3:match('^%b{}$') then
+                        return '$' .. p3:gsub('^{(.*)}$', '%1') .. '$'
+                      else
+                        return '$' .. p3 .. '$'
+                      end
                     end)
                   end)
                 end)
