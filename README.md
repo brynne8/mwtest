@@ -15,3 +15,6 @@ As there's no os specific calls or libraries used, I think it could also run wel
 
 ## linky
 This is a Lua version of linky for QQ using [CoolQ Socket API](https://github.com/mrhso/cqsocketapi). CoolQ and your client communicates using UDP sockets. Timerwheel is used for sending ClientHello every 5 minutes. Lua-iconv is used for encoding and decoding between GB18030 and UTF-8.
+- linky.lua (base QQ bot)
+- feed_service.lua (interacts with linky, send feed contents)
+- science_data.lua (science articles, no interactions, just write to file)
