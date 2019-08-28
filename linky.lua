@@ -73,6 +73,7 @@ feedserver:setpeername('127.0.0.1', '5680')
 
 local timer_id
 local enabled_groups = { ['10000'] = true }
+local is_working = true
 
 function sendToServer(data)
   print(data)
@@ -248,10 +249,29 @@ function executeOp(group_id, op, params)
   elseif op == 'ub' or op == 'unblock' then
     setBlacklist('remove', params)
     sendToServer('GroupMessage ' .. group_id .. ' ' .. mime.b64(u2g:iconv(params .. '已移除黑名单')) .. ' 0')
+  elseif op == 'shutdown' then
+    is_working = false
+    sendToServer('GroupMessage ' .. group_id .. ' ' .. mime.b64(u2g:iconv('Viviane已停止处理消息')) .. ' 0')
+  elseif op == 'startup' then
+    is_working = true
+    sendToServer('GroupMessage ' .. group_id .. ' ' .. mime.b64(u2g:iconv('Viviane已开始处理消息')) .. ' 0')
   end
 end
 
 local last_atme = 0
+local last_feed = {}
+for k in pairs(enabled_groups) do
+  last_feed[k] = 0
+end
+
+function requestFeed(group_id, str)
+  if os.time() - last_feed[group_id] > 60 then
+    feedserver:send(str)
+  else
+    sendToServer('GroupMessage ' .. group_id .. ' ' ..
+      mime.b64(u2g:iconv('条目推送功能每分钟只能用1次喔~')) .. ' 0')
+  end
+end
 
 function processGroupMsg(data)
   if enabled_groups[data[2]] and data[3] ~= '1000000' then
@@ -259,11 +279,12 @@ function processGroupMsg(data)
     local ugroup, uname = check_groupcard(mime.unb64(data[7]), data[2], data[3])
     local msg = g2u:iconv(mime.unb64(data[4])):gsub('&#91;', '['):gsub('&#93;', ']'):gsub('&amp;', '&')
     -- operations
-    local op, params = msg:match('^!(.-) (.*)$')
+    local op, params_start = msg:match('^!(%a*)()')
     if op and op_admins[data[3]] then
-      executeOp(data[2], op, params)
+      executeOp(data[2], op, msg:sub(params_start + 1))
     end
-    
+    if not is_working then return end
+
     if spamwords(msg, data[2], data[3]) then return end
     local cmd = msg:match('^/(%w*)')
     if cmd then
@@ -275,7 +296,9 @@ function processGroupMsg(data)
         sendToServer('GroupMessage ' .. data[2] .. ' ' .. mime.b64(u2g:iconv(cmdlist)) .. ' 0')
         return
       elseif cmd == 'popular' then
-        feedserver:send('RandomPopularArticle ' .. data[2])
+        requestFeed(data[2], 'RandomPopularArticle ' .. data[2])
+      elseif cmd == 'science' then
+        requestFeed(data[2], 'RandomScienceArticle ' .. data[2])
       elseif cmd_replylist[cmd] then
         sendToServer('GroupMessage ' .. data[2] .. ' ' .. mime.b64(u2g:iconv(cmd_replylist[cmd])) .. ' 0')
         return
@@ -302,6 +325,19 @@ function processNewMember(data)
   end
 end
 
+function processFeed(data)
+  if data[3] == '1' then
+    last_feed[data[2]] = os.time()
+    sendToServer('GroupMessage ' .. data[2] .. ' ' ..
+      mime.b64(u2g:iconv(data[5] .. (data[7] and ('（昨日浏览量：' .. data[7] .. '）') or '') ..
+        '\n\n' .. data[6]:gsub('\255', ' ') .. '\n' ..
+        'https://zh.wikipedia.org/wiki/' .. Utils.urlEncode(data[4]))) .. ' 0')
+  else
+    sendToServer('GroupMessage ' .. data[2] .. ' ' ..
+      mime.b64(u2g:iconv('数据还没下载好呢，等下喔~')) .. ' 0')
+  end
+end
+
 -- Main Loop
 local bl_file = io.open("mwtest/bl.txt", "r")
 for line in bl_file:lines() do
@@ -312,11 +348,6 @@ bl_string = bl_file:read('*a')
 bl_file:close()
 
 sendClientHello()
-
-local last_feed = {}
-for k in pairs(enabled_groups) do
-  last_feed[k] = 0
-end
 
 while true do
   local recvbuff, recvip, recvport = cqclient:receivefrom()
@@ -329,20 +360,7 @@ while true do
     elseif data[1] == 'RequestAddGroup' then
       checkBlacklist(data)
     elseif data[1] == 'Feed' then
-      if os.time() - last_feed[data[2]] > 60 then
-        if data[3] == '1' then
-          last_feed[data[2]] = os.time()
-          sendToServer('GroupMessage ' .. data[2] .. ' ' ..
-            mime.b64(u2g:iconv(data[5] .. '（昨日浏览量：' .. data[7] .. '）\n\n' .. data[6] .. '\n' ..
-              'https://zh.wikipedia.org/wiki/' .. Utils.urlEncode(data[4]))) .. ' 0')
-        else
-          sendToServer('GroupMessage ' .. data[2] .. ' ' ..
-            mime.b64(u2g:iconv('数据还没下载好呢，等下喔~')) .. ' 0')
-        end
-      else
-        sendToServer('GroupMessage ' .. data[2] .. ' ' ..
-          mime.b64(u2g:iconv('热门条目功能每分钟只能用1次喔~')) .. ' 0')
-      end
+      processFeed(data)
     else
       -- print(recvbuff, recvip, recvport)
     end
