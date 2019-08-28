@@ -29,7 +29,7 @@ local spamlist = { '六四', '天安门', '暴动', '逃犯', '港独', '法轮'
   '庆红', '镕基', '洪志', '反送中', '蛤', '中华民国', '瓜瓜', '仲勋', '国锋', '光复', '割让', 
   '晓波', '克强', '韩正', '熙来', '紫阳', '耀邦', '明泽', '柴玲', '王丹', '民运', '主运', '反共',
   '吾尔开希', '艾未未', '会运', '出征', '新疆', '北戴河', '乌鲁木齐', '草榴', '防火长城', '丽媛',
-  '普选', '封锁网站', '新唐人', '达赖' }
+  '普选', '封锁网站', '新唐人', '达赖', '刘鹤' }
 
 local content_black = { '六四', '学运', '学潮', '社运', '会运', '民运', '主运', '反共', '逃犯条例',
   '示威', '天安门', '异议', '持不同政见' }
@@ -115,7 +115,7 @@ function getTopView()
       taskset:addthread(function()
         local disp_name, extract = getSummary(art_name)
         topview_data.new_list[id].disp_name = disp_name
-        topview_data.new_list[id].extract = extract
+        topview_data.new_list[id].extract = extract == '' and '无摘要' or extract
         if id % 10 == 0 then print(id) end
       end)
     end
