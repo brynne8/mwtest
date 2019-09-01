@@ -29,7 +29,7 @@ local spamlist = { '六四', '天安门', '暴动', '逃犯', '港独', '法轮'
   '庆红', '镕基', '洪志', '反送中', '蛤', '中华民国', '瓜瓜', '仲勋', '国锋', '光复', '割让', 
   '晓波', '克强', '韩正', '熙来', '紫阳', '耀邦', '明泽', '柴玲', '王丹', '民运', '主运', '反共',
   '吾尔开希', '艾未未', '会运', '出征', '新疆', '北戴河', '乌鲁木齐', '草榴', '防火长城', '丽媛',
-  '普选', '封锁网站', '新唐人', '达赖', '刘鹤' }
+  '普选', '封锁网站', '新唐人', '达赖', '刘鹤', '王沪宁' }
 
 local content_black = { '六四', '学运', '学潮', '社运', '会运', '民运', '主运', '反共', '逃犯条例',
   '示威', '天安门', '异议', '持不同政见' }
@@ -87,14 +87,14 @@ function getSummary(art_name)
   end
 end
 
-function getTopView()
+function getTopView(new_date)
   print('Start fetching topviews')
   local old_last_date = topview_data.last_date
   local cur_datetime = os.date('*t', os.time() - 86400)
   local y = cur_datetime.year
   local m = cur_datetime.month < 10 and ('0' .. cur_datetime.month) or cur_datetime.month
   local d = cur_datetime.day
-  topview_data.last_date = d
+  topview_data.last_date = new_date
   local data_str = y .. '/' .. m .. '/' .. d
   
   local res, code = chttpsget('https://wikimedia.org/api/rest_v1/metrics/pageviews/top/' ..
@@ -174,8 +174,10 @@ while true do
     end
   else
     local curdate = os.date('*t')
-    if topview_data.last_date ~= curdate.day - 1 and curdate.hour >= 10 then
-      copas.addthread(getTopView)
+    if topview_data.last_date ~= curdate.day and curdate.hour >= 10 then
+      copas.addthread(function ()
+        getTopView(curdate.day)
+      end)
     end
     if copas.finished() then
       local new_len = #topview_data.new_list
