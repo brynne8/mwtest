@@ -93,7 +93,7 @@ function getTopView(new_date)
   local cur_datetime = os.date('*t', os.time() - 86400)
   local y = cur_datetime.year
   local m = cur_datetime.month < 10 and ('0' .. cur_datetime.month) or cur_datetime.month
-  local d = cur_datetime.day
+  local d = cur_datetime.day < 10 and ('0' .. cur_datetime.day) or cur_datetime.day
   topview_data.last_date = new_date
   local data_str = y .. '/' .. m .. '/' .. d
   
