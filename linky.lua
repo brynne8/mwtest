@@ -13,33 +13,18 @@ local function utf8char(unicode)
   local char = string.char
   if unicode <= 0x7F then return char(unicode) end
 
-  if (unicode <= 0x7FF) then
-    local Byte0 = 0xC0 + bit.rshift(unicode, 6);
-    local Byte1 = 0x80 + bit.band(unicode, 0x3F);
-    return char(Byte0, Byte1);
-  end;
-
-  if (unicode <= 0xFFFF) then
-    local Byte0 = 0xE0 + bit.rshift(unicode, 12);
-    local Byte1 = 0x80 + bit.band(bit.rshift(unicode, 6), 0x3F);
-    local Byte2 = 0x80 + bit.band(unicode, 0x3F);
-    return char(Byte0, Byte1, Byte2);
-  end;
-
-  if (unicode <= 0x10FFFF) then
-    local code = unicode
-    local Byte3= 0x80 + bit.band(code, 0x3F);
-    code       = bit.rshift(code, 6)
-    local Byte2= 0x80 + bit.band(code, 0x3F);
-    code       = bit.rshift(code, 6)
-    local Byte1= 0x80 + bit.band(code, 0x3F);
-    code       = bit.rshift(code, 6)
-    local Byte0= 0xF0 + code;
-
-    return char(Byte0, Byte1, Byte2, Byte3);
-  end;
-
-  error 'Unicode cannot be greater than U+10FFFF!'
+  local continue_flag = bit.rshift(unicode, 6)
+  local bytes = {}
+  
+  repeat
+    bytes[#bytes + 1] = 0x80 + bit.band(unicode, 0x3F);
+    unicode = bit.rshift(unicode, 6)
+    
+    continue_flag = bit.rshift(continue_flag, 5)
+  until continue_flag == 0
+  bytes[#bytes + 1] = 0xF0 + unicode;
+  
+  return char(unpack(table.reverse(bytes)))
 end
 
 local transwiki = {
@@ -51,9 +36,12 @@ local transwiki = {
   ['ja'] = 'ja.wikipedia.org',
   ['ko'] = 'ko.wikipedia.org',
   ['m'] = 'meta.wikimedia.org',
-  ['mirror'] = 'zh.wikipedia-mirror.org',
   ['q'] = 'zh.wikiquote.org',
-  ['s'] = 'zh.wikisource.org'
+  ['s'] = 'zh.wikisource.org',
+  ['mirror'] = 'zh.wikipedia-mirror.org',
+  ['en-mirror'] = 'en.wikipedia-mirror.org',
+  ['ja-mirror'] = 'ja.wikipedia-mirror.org',
+  ['zh-mirror'] = 'zh.wikipedia-mirror.org'
 }
 
 local iconv = require('iconv')
@@ -71,8 +59,11 @@ print('Client started')
 local feedserver = socket.udp()
 feedserver:setpeername('127.0.0.1', '5680')
 
+math.randomseed( tonumber(tostring(os.time()):reverse():sub(1,6)) )
+
 local timer_id
 local enabled_groups = { ['10000'] = true }
+
 local is_working = true
 
 function sendToServer(data)
@@ -98,8 +89,12 @@ function linky(msg, group_id)
     local trans_key, trans_val = wikilink:match('^(.-):(.*)')
     local remote_url = transwiki[trans_key]
     if remote_url then
-      sendToServer('GroupMessage ' .. group_id .. ' ' ..
-        mime.b64(u2g:iconv('https://' .. remote_url .. '/wiki/' .. Utils.urlEncode(trans_val))) .. ' 0')
+      local send_str = 'https://' .. remote_url .. '/wiki/' .. Utils.urlEncode(trans_val)
+      if trans_key:match('mirror') then
+        send_str = send_str .. '\n这个网址是维基百科的镜像网站。可以登陆编辑。请注意，请勿在其他不明来源' ..
+                      '的镜像网站登录维基账号，否则账号可能被盗。'
+      end
+      sendToServer('GroupMessage ' .. group_id .. ' ' .. mime.b64(u2g:iconv(send_str)) .. ' 0')
     else
       sendToServer('GroupMessage ' .. group_id .. ' ' ..
         mime.b64(u2g:iconv('https://zh.wikipedia.org/wiki/' .. Utils.urlEncode(wikilink))) .. ' 0')
@@ -115,6 +110,8 @@ function linky(msg, group_id)
 end
 
 local spamlist = { '翻墙', '梯子' }
+
+Utils.tableConcat(spamlist, extend_spamlist)
 
 local spamusers = {}
 
@@ -144,9 +141,10 @@ end
 
 local bad_patterns = { '上维基娘', '百度.-词条', '词典.-词条' }
 
-local replylist = {
-  ['^表白vva$'] = '谢谢。'
-}
+local ReplyDicts = require('mwtest/reply_dicts')
+local replylist = ReplyDicts.replylist
+local cmd_replylist = ReplyDicts.cmd_replylist
+local newbie_reply = ReplyDicts.newbie_reply
 
 function reply(msg, group_id)
   for _, v in ipairs(bad_patterns) do
@@ -162,10 +160,6 @@ function reply(msg, group_id)
     end
   end
 end
-
-local cmd_replylist = {
-  ping = 'pong'
-}
 
 local dont_checkcard = { ['308617666'] = true }
 
@@ -258,6 +252,12 @@ function executeOp(group_id, op, params)
   end
 end
 
+function stripAt(msg)
+  local at_qq, rest_msg = msg:match('^%[CQ:at,qq=(%d+)%] (.*)')
+  if not at_qq then rest_msg = msg end
+  return at_qq, rest_msg
+end
+
 local last_atme = 0
 local last_feed = {}
 for k in pairs(enabled_groups) do
@@ -286,19 +286,26 @@ function processGroupMsg(data)
     if not is_working then return end
 
     if spamwords(msg, data[2], data[3]) then return end
+    local at_qq, msg = stripAt(msg)
     local cmd = msg:match('^/(%w*)')
     if cmd then
-      if cmd == 'info' then
+      if cmd == 'info' or cmd == 'help' then
         local cmdlist = '当前可用所有命令有：\n'
         for k in pairs(cmd_replylist) do
           cmdlist = cmdlist .. '/' .. k .. ' '
         end
         sendToServer('GroupMessage ' .. data[2] .. ' ' .. mime.b64(u2g:iconv(cmdlist)) .. ' 0')
         return
+      elseif cmd == 'newbie' then
+        local r = math.random(#newbie_reply)
+        sendToServer('GroupMessage ' .. data[2] .. ' ' .. mime.b64(u2g:iconv(newbie_reply[r])) .. ' 0')
+        return
       elseif cmd == 'popular' then
         requestFeed(data[2], 'RandomPopularArticle ' .. data[2])
+        return
       elseif cmd == 'science' then
         requestFeed(data[2], 'RandomScienceArticle ' .. data[2])
+        return
       elseif cmd_replylist[cmd] then
         sendToServer('GroupMessage ' .. data[2] .. ' ' .. mime.b64(u2g:iconv(cmd_replylist[cmd])) .. ' 0')
         return
@@ -307,7 +314,7 @@ function processGroupMsg(data)
     if linky(msg, data[2]) then return end
     if (op ~= '') and reply(msg, data[2]) then return end
     if ugroup ~= 'User' and ugroup ~= '管-User' and os.time() - last_atme > 600 then
-      if msg:match('^%[CQ:at,qq=10000%]') then
+      if at_qq == '10000' then
         last_atme = os.time()
         sendToServer('GroupMessage ' .. data[2] .. ' ' ..
           mime.b64(u2g:iconv('我是群管机器人Viviane，我不是人工智能，不能聊天。[CQ:face,id=21]')) .. ' 0')
