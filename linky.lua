@@ -111,8 +111,6 @@ end
 
 local spamlist = { '翻墙', '梯子' }
 
-Utils.tableConcat(spamlist, extend_spamlist)
-
 local spamusers = {}
 
 function spamwords(msg, group_id, qq_num)
