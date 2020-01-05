@@ -18,3 +18,13 @@ This is a Lua version of linky for QQ using [CoolQ Socket API](https://github.co
 - linky.lua (base QQ bot)
 - feed_service.lua (interacts with linky, send feed contents)
 - science_data.lua (science articles, no interactions, just write to file)
+
+### Patch to copas.lua
+As copas only has `addthread` but no `removethread`, if some of our requests are irresponsive for a long time, copas will never finish. Then we won't have a clean copas for a second run. The following `removeall` function could be added to simply removing any threads.
+```lua
+function copas.removeall()
+  _reading = newset()
+  _writing = newset()
+  _sleeping.times = {}
+end
+```
