@@ -29,10 +29,10 @@ local spamlist = { '六四', '天安门', '暴动', '逃犯', '港独', '法轮'
   '庆红', '镕基', '洪志', '反送中', '蛤', '中华民国', '瓜瓜', '仲勋', '国锋', '光复', '割让', 
   '晓波', '克强', '韩正', '熙来', '紫阳', '耀邦', '明泽', '柴玲', '王丹', '民运', '主运', '反共',
   '吾尔开希', '艾未未', '会运', '出征', '新疆', '北戴河', '乌鲁木齐', '草榴', '防火长城', '丽媛',
-  '普选', '封锁网站', '新唐人', '达赖', '刘鹤', '王沪宁' }
+  '普选', '封锁网站', '新唐人', '达赖', '刘鹤', '王沪宁', '李鹏', '栗战', '维尼' }
 
 local content_black = { '六四', '学运', '学潮', '社运', '会运', '民运', '主运', '反共', '逃犯条例',
-  '示威', '天安门', '异议', '持不同政见' }
+  '示威', '天安门', '异议', '持不同政见', '香港' }
 
 local topview_data = {
   last_date = 0,
@@ -160,6 +160,8 @@ if pop_str:len() > 100 then
 end
 pop_file:close()
 
+local fetch_stime = nil
+
 while true do
   local recvbuff, recvip, recvport = lkclient:receivefrom()
   if recvbuff then
@@ -175,11 +177,13 @@ while true do
   else
     local curdate = os.date('*t')
     if topview_data.last_date ~= curdate.day and curdate.hour >= 10 then
+      fetch_stime = os.time()
       copas.addthread(function ()
         getTopView(curdate.day)
       end)
     end
     if copas.finished() then
+      fetch_stime = nil
       local new_len = #topview_data.new_list
       if new_len ~= 0 then
         for i = new_len, 1, -1 do
@@ -202,6 +206,8 @@ while true do
         f:write(json.encode(topview_data))
         f:close()
       end
+    elseif fetch_stime and os.time() - fetch_stime > 900 then
+      copas.removeall()
     else
       copas.step()
     end
