@@ -7,6 +7,9 @@ local limit = require("copas.limit")
 local MediaWikiApi = require('mwtest/mwapi')
 local Utils = require('mwtest/utils')
 local json = require('cjson')
+local ltn12 = require('ltn12')
+
+chttp.TIMEOUT = 20
 
 local science_data = {
   last_date = 0,
@@ -80,6 +83,8 @@ function getSummary(titles)
       v.extract = stripHtmlTags(v.extract)
     end
     return pages
+  else
+    return getSummary(titles)
   end
 end
 
@@ -94,22 +99,24 @@ local sci_cats = {
 
 function getScienceArt()
   print('Start fetching science articles')
-  local getCatMembers = function (cat, cmcontinue)
-    local res, code = chttpsget('https://zh.wikipedia.org/w/api.php?action=query&format=json&list=categorymembers' ..
-      '&cmlimit=500&cmtitle=Category:' .. cat .. (cmcontinue and ('&cmcontinue=' .. cmcontinue) or ''))
+  local function getCatMembers(cat, cmcontinue)
+    local uri = 'https://zh.wikipedia.org/w/api.php?action=query&format=json&list=categorymembers' ..
+      '&cmlimit=max&cmtitle=Category:' .. Utils.urlEncode(cat) .. (cmcontinue and ('&cmcontinue=' .. cmcontinue) or '')
+    local res, code = chttpsget(uri)
     if code ~= 200 then
       MediaWikiApi.trace('Failed to get science art')
-      return
+      return getCatMembers(cat, cmcontinue)
     end
     
-    local raw_catmem = json.decode(res).query.categorymembers
+    res = json.decode(res)
+    local raw_catmem = res.query.categorymembers
     for _, v in ipairs(raw_catmem) do
       local art_name = v.title:match('Talk:(.-)$')
       if art_name then science_dict[art_name:gsub(' ', '_')] = true end
     end
     
     if res.continue then
-      getCatMembers(cat, cmcontinue)
+      return getCatMembers(cat, res.continue.cmcontinue)
     end
   end
 
@@ -140,6 +147,19 @@ for art_name in pairs(science_dict) do
     end)
     titles = ''
   end
+end
+
+if titles ~= '' then
+  local temp_titles = titles:sub(2)
+  taskset:addthread(function()
+    local pages = getSummary(temp_titles)
+    for _, v in ipairs(pages) do
+      science_dict[v.title:gsub(' ', '_')] = {
+        disp_name = v.varianttitles['zh-cn'],
+        extract = v.extract == '' and '无摘要' or v.extract
+      }
+    end
+  end)
 end
 
 copas.loop()
