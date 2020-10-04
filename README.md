@@ -14,7 +14,7 @@ As there's no os specific calls or libraries used, I think it could also run wel
 - The DYK update code has to run by an admin account (as T:Dyk is cascade protected)
 
 ## linky
-This is a Lua version of linky for QQ using [CoolQ Socket API](https://github.com/mrhso/cqsocketapi). Mirai Native (CoolQ equavalent) and your client communicates using UDP sockets. Timerwheel is used for sending ClientHello every 5 minutes. A [FFI binding](https://github.com/semyon422/aqua/blob/master/aqua/iconv/init.lua) to libiconv is used for encoding and decoding between GB18030 and UTF-8.
+This is a Lua version of linky for QQ using [CoolQ Socket API](https://github.com/mrhso/cqsocketapi). Mirai Native (CoolQ equavalent) and your client communicates using UDP sockets. Timerwheel is used for sending ClientHello every 5 minutes. An [FFI binding](https://github.com/semyon422/aqua/blob/master/aqua/iconv/init.lua) to libiconv is used for encoding and decoding between GB18030 and UTF-8.
 - linky.lua (base QQ bot)
 - feed_service.lua (interacts with linky, send feed contents)
 - science_data.lua (science articles, no interactions, just write to file)
