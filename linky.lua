@@ -31,6 +31,7 @@ local transwiki = {
   ['c'] = 'commons.wikimedia.org',
   ['commons'] = 'commons.wikimedia.org',
   ['en'] = 'en.wikipedia.org',
+  ['simple'] = 'simple.wikipedia.org',
   ['d'] = 'www.wikidata.org',
   ['de'] = 'de.wikipedia.org',
   ['ja'] = 'ja.wikipedia.org',
@@ -38,10 +39,24 @@ local transwiki = {
   ['m'] = 'meta.wikimedia.org',
   ['q'] = 'zh.wikiquote.org',
   ['s'] = 'zh.wikisource.org',
+  ['wikt'] = 'zh.wiktionary.org',
+  ['n'] = 'zh.wikinews.org',
+  ['b'] = 'zh.wikibooks.org',
+  ['voy'] = 'zh.wikivoyage.org',
+  ['v'] = 'zh.wikiversity.org',
+  ['species'] = 'species.wikimedia.org',
+  ['mw'] = 'www.mediawiki.org',
+  ['meta'] = 'meta.wikimedia.org',
   ['mirror'] = 'zh.wikipedia-mirror.org',
   ['en-mirror'] = 'en.wikipedia-mirror.org',
   ['ja-mirror'] = 'ja.wikipedia-mirror.org',
-  ['zh-mirror'] = 'zh.wikipedia-mirror.org'
+  ['zh-mirror'] = 'zh.wikipedia-mirror.org',
+  ['zhdel'] = 'zhdel.miraheze.org'
+}
+
+local special_transwiki = {
+  ['phab'] = 'phabricator.wikimedia.org/',
+  ['otrs'] = 'ticket.wikimedia.org/otrs/index.pl?Action=AgentTicketZoom&TicketNumber='
 }
 
 local iconv = require('iconv')
@@ -88,6 +103,7 @@ function linky(msg, group_id)
   if wikilink then
     local trans_key, trans_val = wikilink:match('^(.-):(.*)')
     local remote_url = transwiki[trans_key]
+    local special_remote_url = special_transwiki[trans_key]
     if remote_url then
       local send_str = 'https://' .. remote_url .. '/wiki/' .. Utils.urlEncode(trans_val)
       if trans_key:match('mirror') then
@@ -95,6 +111,9 @@ function linky(msg, group_id)
                       '的镜像网站登录维基账号，否则账号可能被盗。'
       end
       sendToServer('GroupMessage ' .. group_id .. ' ' .. mime.b64(u2g:iconv(send_str)) .. ' 0')
+    else if special_remote_url then
+        sendToServer('GroupMessage ' .. group_id .. ' ' ..
+        mime.b64(u2g:iconv('https://' .. remote_url .. Utils.urlEncode(trans_val))) .. ' 0')
     else
       sendToServer('GroupMessage ' .. group_id .. ' ' ..
         mime.b64(u2g:iconv('https://zh.wikipedia.org/wiki/' .. Utils.urlEncode(wikilink))) .. ' 0')
