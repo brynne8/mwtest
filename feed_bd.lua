@@ -1,11 +1,26 @@
 local curl_http = require('curl_http')
 local json = require('cjson')
 local socket = require('socket')
--- local inspect = require('inspect')
+local entity = require('htmlEntities')
 
 local lastUnix = nil
 
-function search(keyword)
+local function format_origin(content)
+  if type(content) == 'string' then
+    content = entity.decode(content)
+                :gsub('</br>', '__NL__')
+                :gsub('%s+', '\255')
+                :gsub('__NL__', '\n')
+    if #content > 100 then
+      content = content:sub(1, 101):match('(.*)[%z\1-\127\194-\244]') .. '...'
+    end
+    return '\n____________________\n' .. content
+  else
+    return ''
+  end
+end
+
+local function search(keyword)
   local res, err, ecode = curl_http.httpsget(
       'http://m.baidu.com/sf/vsearch?' .. curl_http.params{
         word = keyword,
@@ -30,9 +45,8 @@ function search(keyword)
       if tonumber(v.pubUnixTime) <= start_time then break end
       table.insert(ret, {
         header = v.nick .. '@' .. (v.source or v.site)  .. '：(' .. v.pubTime .. ')',
-        text = v.SubAbs:gsub('<.->', ''):gsub('%s+', '\255')
-          .. (type(v.originContent) == 'string' and
-              v.originContent:gsub('</br>', '__NL__'):gsub('%s+', '\255'):gsub('__NL__', '\n') or ''),
+        text = entity.decode(v.SubAbs):gsub('<.->', ''):gsub('%s+', '\255')
+          .. format_origin(v.originContent),
         url = v.source_url or v.url
       })
     end
